@@ -1210,6 +1210,8 @@ dtb-$(CONFIG_STM32MP15X) += \
 
 dtb-$(CONFIG_STM32MP25X) += \
 	stm32mp257f-dk.dtb \
+	myb-stm32mp257x-2GB.dtb \
+	myb-stm32mp257x-1GB.dtb \
 	stm32mp257f-ev1.dtb
 
 dtb-$(CONFIG_SOC_K3_AM654) += \
