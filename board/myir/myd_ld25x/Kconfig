@@ -1,4 +1,4 @@
-if TARGET_ST_MYD_LD25X
+if TARGET_MYIR_MYD_LD25X
 
 config SYS_BOARD
 	default "myd_ld25x"

@@ -13,13 +13,13 @@ config TARGET_ST_STM32MP25X
 		managed by board/st/stm32mp2
 		The difference between board are managed with devicetree
 
-config TARGET_ST_MYD_LD25X
+config TARGET_MYIR_MYD_LD25X
         bool "MYIR MYD-LD25X boards"
         imply BOOTSTAGE
         imply CMD_BOOTSTAGE
         help
                 target the STMicroelectronics board with SOC STM32MP25x
-                managed by board/myir/stm32mp2
+                managed by board/myir/myd_ld25x
                 The difference between board are managed with devicetree
 
 endchoice
