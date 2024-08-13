@@ -1,0 +1,13 @@
+if TARGET_ST_MYD_LD25X
+
+config SYS_BOARD
+	default "myd_ld25x"
+
+config SYS_VENDOR
+	default "myir"
+
+config SYS_CONFIG_NAME
+	default "myd_ld25x"
+
+source "board/myir/common/Kconfig"
+endif
