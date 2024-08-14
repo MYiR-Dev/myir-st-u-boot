@@ -288,6 +288,42 @@ static const struct detect_info_t stm32mp25x_bridges[] = {
 	},
 };
 
+static void board_myd_ld25x_init(void)
+{
+	const char *compatible;
+	struct udevice *dev;
+	ofnode node;
+
+	/* auto detection of connected panels */
+	compatible = detect_device(stm32mp25x_panels, ARRAY_SIZE(stm32mp25x_panels));
+	if (!compatible) {
+		/* remove the panel in environment */
+		env_set("panel", "");
+		/* no panel detected then unbind lvds to avoid a bad clock tree */
+		node = ofnode_by_compatible(ofnode_null(), "st,stm32mp25-lvds");
+		if (!ofnode_valid(node))
+			return;
+
+		device_find_global_by_ofnode(node, &dev);
+		device_remove(dev, DM_REMOVE_NORMAL);
+		device_unbind(dev);
+	} else {
+		/* save the detected compatible in environment */
+		env_set("panel", compatible);
+	}
+
+	/* auto detection of connected hdmi bridge */
+	compatible = detect_device(stm32mp25x_bridges, ARRAY_SIZE(stm32mp25x_bridges));
+
+	if (!compatible)
+		/* remove the hdmi bridge in environment */
+		env_set("hdmi", "");
+	else
+		/* save the detected compatible in environment */
+		env_set("hdmi", compatible);
+
+}
+
 static void board_stm32mp25x_eval_init(void)
 {
 	const char *compatible;
@@ -429,6 +465,15 @@ static bool board_is_stm32mp257_eval(void)
 	if (CONFIG_IS_ENABLED(TARGET_ST_STM32MP25X) &&
 	    (of_machine_is_compatible("st,stm32mp257f-ev1")))
 		return true;
+
+	return false;
+}
+
+static bool board_is_myd_ld25x(void)
+{
+	if (CONFIG_IS_ENABLED(TARGET_MYIR_MYD_LD25X) &&
+	    (of_machine_is_compatible("st,myb-stm32mp257x-2GB")))
+	 	return true;
 
 	return false;
 }
@@ -608,6 +653,9 @@ int board_late_init(void)
 	char dtb_name[256];
 	int buf_len;
 
+	if (board_is_myd_ld25x())
+		board_myd_ld25x_init();
+		
 	if (board_is_stm32mp257_eval())
 		board_stm32mp25x_eval_init();
 

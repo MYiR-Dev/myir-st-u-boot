@@ -10,7 +10,7 @@
 
 / {
 	model = "MYiR STM32MP257F Evaluation Board";
-	compatible = "st,stm32mp257f-ev1", "st,stm32mp257";
+	compatible = "st,myb-stm32mp257x-2GB", "st,stm32mp257";
 
 	aliases {
 		ethernet0 = &eth2;
