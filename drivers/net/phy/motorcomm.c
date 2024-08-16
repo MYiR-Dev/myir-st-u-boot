@@ -64,6 +64,17 @@ static int ytphy_write_ext(struct phy_device *phydev, u32 regnum, u16 val)
 	return ret;
 }
 
+static int yt8531_delay_init(struct phy_device *phydev)
+{
+        int ret;
+        int val = 0;
+        struct device_node *np;
+
+        ret = ytphy_write_ext(phydev,0xa003,0x4f8);
+        return ret;
+
+}
+
 static int yt8531_led_init(struct phy_device *phydev)
 {
     int ret;
@@ -97,12 +108,12 @@ static int yt8521_config_init(struct phy_device *phydev)
 {
 	int ret;
 	int val;
-
+printf("moto phy config\n");
 	ytphy_write_ext(phydev, 0xa000, 0);
 	ret = genphy_config_aneg(phydev);
 	if (ret < 0)
 		return ret;
-
+printf("phyid=%x\n",phydev->phy_id&0xfff);
 	if((phydev->phy_id&0xfff) == PHY_ID_YT8531S){
 	printf("phyid=%x\n",phydev->phy_id&0xfff);
 		ret = yt8531_led_init(phydev);
@@ -131,6 +142,10 @@ static int yt8521_config_init(struct phy_device *phydev)
 	ret = ytphy_write_ext(phydev, 0xc, val);
 	if (ret < 0)
 		return ret;		
+		
+	if (yt8531_delay_init(phydev) < 0){
+		printf("delay set failed\n");
+	}
 	printf ("yt8521_config_init, 8531 init call out.\n");
 	return ret;
 }

@@ -570,9 +570,9 @@ int phy_init(void)
 #endif
 #ifdef CONFIG_PHY_MOTORCOMM
 	phy_motorcomm_init();
-#endif
+#else
 	genphy_init();
-
+#endif
 	return 0;
 }
 
