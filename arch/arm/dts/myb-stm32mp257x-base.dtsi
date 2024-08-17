@@ -53,12 +53,19 @@
 			compatible = "fixed-clock";
 			clock-frequency = <24000000>;
 		};
+		
+		
+        clk_ext_phy1: clk-ext-phy1 {
+            #clock-cells = <0>;
+            compatible = "fixed-clock";
+            clock-frequency = <25000000>;
+        };
 
 		clk_ext_phy2: clk-ext-phy2 {
                         #clock-cells = <0>;
                         compatible = "fixed-clock";
                         clock-frequency = <25000000>;
-                };
+        };
 
 		pad_clk: pad-clk {
 			#clock-cells = <0>;
@@ -254,6 +261,33 @@
 		};
 
 	};
+};
+
+&eth1 {
+        status = "okay";
+        pinctrl-0 = <&eth1_rgmii_pins_a &eth1_mdio_pins_a>;
+        pinctrl-1 = <&eth1_rgmii_sleep_pins_a &eth1_mdio_sleep_pins_a>;
+        pinctrl-names = "default", "sleep";
+        phy-mode = "rgmii-id";
+        max-speed = <1000>;
+        phy-handle = <&phy1_eth1>;
+        st,eth-clk-sel;
+		st,ext-phyclk = <&clk_ext_phy1>;
+        snps,ext-systime;
+
+        mdio1 {
+                #address-cells = <1>;
+                #size-cells = <0>;
+                compatible = "snps,dwmac-mdio";
+                phy1_eth1: ethernet-phy@4 {
+                        compatible = "ethernet-phy-id001c.c916";
+                        reset-gpios =  <&gpioi 4 GPIO_ACTIVE_LOW>;
+                        reset-assert-us = <10000>;
+                        reset-deassert-us = <80000>;
+                        realtek,eee-disable;
+                        reg = <4>;
+                };
+        };
 };
 
 &eth2 {

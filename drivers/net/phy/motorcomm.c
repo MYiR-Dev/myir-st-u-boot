@@ -82,7 +82,6 @@ static int yt8531_led_init(struct phy_device *phydev)
     int mask;
 
     val = ytphy_read_ext(phydev, YT8521_EXTREG_LED1);
-    printf("val=%x\n",val);
     if (val < 0)
         return val;
 
@@ -108,12 +107,10 @@ static int yt8521_config_init(struct phy_device *phydev)
 {
 	int ret;
 	int val;
-printf("moto phy config\n");
 	ytphy_write_ext(phydev, 0xa000, 0);
 	ret = genphy_config_aneg(phydev);
 	if (ret < 0)
 		return ret;
-printf("phyid=%x\n",phydev->phy_id&0xfff);
 	if((phydev->phy_id&0xfff) == PHY_ID_YT8531S){
 	printf("phyid=%x\n",phydev->phy_id&0xfff);
 		ret = yt8531_led_init(phydev);
