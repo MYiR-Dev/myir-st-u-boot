@@ -244,7 +244,7 @@ bool myir_reset_phy(void)
 {
 	ofnode node;
 	int ret;
-	node = ofnode_by_compatible(ofnode_null(), "snps,dwmac-mdio");
+	node = ofnode_by_compatible(ofnode_null(), "ethernet-phy-id001c.c916");
 	if (!ofnode_valid(node))
 	{
 		printf("node not exist\n");
