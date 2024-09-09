@@ -80,9 +80,9 @@
 		led-blue {
 			function = LED_FUNCTION_HEARTBEAT;
 			color = <LED_COLOR_ID_BLUE>;
-			gpios = <&gpioh 7 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "heartbeat";
-			default-state = "off";
+			gpios = <&gpioz 5 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "none";
+			default-state = "on";
 		};
 	};
 

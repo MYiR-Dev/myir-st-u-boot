@@ -327,12 +327,22 @@ static const struct detect_info_t stm32mp25x_bridges[] = {
 	},
 };
 
+static void led_gpio(void)
+{
+	unsigned int gpio_led=116;
+	gpio_request(gpio_led, "led-gpio");
+	gpio_direction_output(gpio_led, 0);
+	gpio_set_value(gpio_led, 0);
+	gpio_free(gpio_led);
+}
+
 static void board_myd_ld25x_init(void)
 {
 	const char *compatible;
 	struct udevice *dev;
 	ofnode node;
 
+	led_gpio();
 	/* auto detection of connected panels */
 	compatible = detect_device(stm32mp25x_panels, ARRAY_SIZE(stm32mp25x_panels));
 	if (!compatible) {
