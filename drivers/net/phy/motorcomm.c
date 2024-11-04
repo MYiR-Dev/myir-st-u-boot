@@ -143,7 +143,9 @@ static int yt8521_config_init(struct phy_device *phydev)
 	if (yt8531_delay_init(phydev) < 0){
 		printf("delay set failed\n");
 	}
-	printf ("yt8521_config_init, 8531 init call out.\n");
+	//printf ("yt8521_config_init, 8531 init call out.\n");
+	val = ytphy_read_ext(phydev, 0xa012);
+	ret = ytphy_write_ext(phydev, 0xa012, val &= ~(0x1 << 6) );
 	return ret;
 }
 
