@@ -521,7 +521,8 @@ static bool board_is_stm32mp257_eval(void)
 static bool board_is_myd_ld25x(void)
 {
 	if (CONFIG_IS_ENABLED(TARGET_MYIR_MYD_LD25X) &&
-	    (of_machine_is_compatible("st,myb-stm32mp257x-2GB")))
+	    (of_machine_is_compatible("st,myb-stm32mp257x-2GB")) &&
+	    (of_machine_is_compatible("st,myb-stm32mp257x-1GB")))
 	 	return true;
 
 	return false;
