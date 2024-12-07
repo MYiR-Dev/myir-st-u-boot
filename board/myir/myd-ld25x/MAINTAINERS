@@ -1,0 +1,10 @@
+STM32MP2 BOARD
+M:	Patrice Chotard <patrice.chotard@st.com>
+M:	Patrick Delaunay <patrick.delaunay@st.com>
+L:	uboot-stm32@st-md-mailman.stormreply.com (moderated for non-subscribers)
+S:	Maintained
+F:	arch/arm/dts/myb-stm32mp257x*
+F:	board/myir/myd_ld25x
+F:	configs/stm32mp25_defconfig
+F:	include/configs/myd_ld25x_common.h
+F:	include/configs/myd_ld25x.h
