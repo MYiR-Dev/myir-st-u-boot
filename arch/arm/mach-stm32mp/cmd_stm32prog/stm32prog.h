@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ OR BSD-3-Clause */
 /*
- * Copyright (C) 2020, STMicroelectronics - All Rights Reserved
+ * Copyright (C) 2020-2024, STMicroelectronics - All Rights Reserved
  */
 
 #ifndef _STM32PROG_H_
@@ -20,13 +20,19 @@
 #define DEFAULT_ADDRESS		0xFFFFFFFF
 
 #define CMD_SIZE		512
-/* SMC is only supported in SPMIN for STM32MP15x */
-#ifdef CONFIG_STM32MP15x
+/* SMC is only supported in SPMIN for STM32MP15X */
+#ifdef CONFIG_STM32MP15X
 #define OTP_SIZE_SMC		1024
 #else
 #define OTP_SIZE_SMC		0
 #endif
-#define OTP_SIZE_TA		776
+/* size of the OTP struct in NVMEM PTA */
+#define _OTP_SIZE_TA(otp)	(((otp) * 2 + 2) * 4)
+#if defined(CONFIG_STM32MP21X) || defined(CONFIG_STM32MP23X) || defined(CONFIG_STM32MP25X)
+#define OTP_SIZE_TA		_OTP_SIZE_TA(368)
+#else
+#define OTP_SIZE_TA		_OTP_SIZE_TA(96)
+#endif
 #define PMIC_SIZE		8
 
 enum stm32prog_target {
@@ -157,7 +163,6 @@ struct stm32prog_data {
 	struct stm32prog_dev_t	dev[STM32PROG_MAX_DEV];	/* array of device */
 	int			part_nb;	/* nb of partition */
 	struct stm32prog_part_t	*part_array;	/* array of partition */
-	bool			fsbl_nor_detected;
 
 	/* command internal information */
 	unsigned int		phase;

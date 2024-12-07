@@ -693,6 +693,11 @@ static const struct clock_config stm32mp13_clock_cfg[] = {
 	PCLK(DDRPERFM, "ddrperfm", "pclk4", 0, GATE_DDRPERFM, SECF_NONE),
 	PCLK(ETH1STP, "eth1stp", "ck_axi", 0, GATE_ETH1STP, SECF_ETH1STP),
 	PCLK(ETH2STP, "eth2stp", "ck_axi", 0, GATE_ETH2STP, SECF_ETH2STP),
+	PCLK(SPI1, "spi1", "pclk2", 0, GATE_SPI1, SECF_NONE),
+	PCLK(SPI2, "spi2", "pclk1", 0, GATE_SPI2, SECF_NONE),
+	PCLK(SPI3, "spi3", "pclk1", 0, GATE_SPI3, SECF_NONE),
+	PCLK(SPI4, "spi4", "pclk6", 0, GATE_SPI4, SECF_SPI4),
+	PCLK(SPI5, "spi5", "pclk6", 0, GATE_SPI5, SECF_SPI5),
 
 	/* Kernel clocks */
 	KCLK(SDMMC1_K, "sdmmc1_k", 0, GATE_SDMMC1, MUX_SDMMC1, SECF_SDMMC1),
@@ -770,7 +775,7 @@ static const struct clock_config stm32mp13_clock_cfg[] = {
 			      GATE_TRACECK, DIV_TRACE),
 };
 
-static int stm32mp13_check_security(void __iomem *base,
+static int stm32mp13_check_security(struct udevice *dev, void __iomem *base,
 				    const struct clock_config *cfg)
 {
 	int sec_id = cfg->sec_id;

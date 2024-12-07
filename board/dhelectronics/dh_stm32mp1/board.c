@@ -229,8 +229,9 @@ static void board_get_coding_straps(void)
 
 	gpio_free_list_nodev(gpio, ret);
 
-	printf("Code:  SoM:rev=%d,ddr3=%d Board:rev=%d\n",
-		somcode, ddr3code, brdcode);
+	if (CONFIG_IS_ENABLED(DISPLAY_PRINT))
+		printf("Code:  SoM:rev=%d,ddr3=%d Board:rev=%d\n",
+		       somcode, ddr3code, brdcode);
 }
 
 int board_stm32mp1_ddr_config_name_match(struct udevice *dev,
@@ -679,7 +680,7 @@ void board_quiesce_devices(void)
 
 /* eth init function : weak called in eqos driver */
 int board_interface_eth_init(struct udevice *dev,
-			     phy_interface_t interface_type)
+			     phy_interface_t interface_type, ulong rate)
 {
 	u8 *syscfg;
 	u32 value;

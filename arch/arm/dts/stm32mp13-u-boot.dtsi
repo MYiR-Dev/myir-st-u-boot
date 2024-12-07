@@ -41,10 +41,21 @@
 
 			status = "okay";
 		};
+
+		etzpc: bus@5c007000 {
+			/* pre-reloc probe = reserve video frame buffer in video_reserve() */
+			display-controller@5a001000 {
+				bootph-some-ram;
+			};
+		};
 	};
 };
 
 &bsec {
+	bootph-all;
+};
+
+&etzpc {
 	bootph-all;
 };
 
@@ -109,5 +120,10 @@
 };
 
 &syscfg {
+	bootph-all;
+};
+
+&usbphyc {
+	/* stm32-usbphyc-clk = ck_usbo_48m is a source clock of RCC CCF */
 	bootph-all;
 };

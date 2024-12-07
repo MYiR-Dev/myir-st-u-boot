@@ -30,7 +30,7 @@ endif
 
 targets += dt.dtb
 
-$(DTB): arch-dtbs
+$(DTB): arch-dtbs arch-ext-dtbs
 	$(Q)test -e $@ || (						\
 	echo >&2;							\
 	echo >&2 "Device Tree Source ($@) is not correctly specified.";	\
@@ -42,6 +42,15 @@ $(DTB): arch-dtbs
 PHONY += arch-dtbs
 arch-dtbs:
 	$(Q)$(MAKE) $(build)=arch/$(ARCH)/dts dtbs
+
+PHONY += arch-ext-dtbs
+arch-ext-dtbs: arch-dtbs
+	$(Q)if [ -e $(EXT_DTS) ]; then \
+		echo "  EXT_DTS in $(EXT_DTS)"; \
+		$(MAKE) $(build)=$(EXT_DTS) dtbs && \
+		(cp $(EXT_DTS)/*.dtb arch/$(ARCH)/dts/ || \
+		/bin/true) || /bin/false; \
+	else /bin/true; fi
 
 ifeq ($(CONFIG_SPL_BUILD),y)
 obj-$(CONFIG_OF_EMBED) := dt-spl.dtb.o
@@ -66,3 +75,4 @@ clean-files := dt.dtb.S
 subdir- += ../arch/arc/dts ../arch/arm/dts ../arch/m68k/dts ../arch/microblaze/dts	\
 	   ../arch/mips/dts ../arch/nios2/dts ../arch/powerpc/dts ../arch/riscv/dts	\
 	   ../arch/sandbox/dts ../arch/sh/dts ../arch/x86/dts ../arch/xtensa/dts
+subdir- += $(EXT_DTS)

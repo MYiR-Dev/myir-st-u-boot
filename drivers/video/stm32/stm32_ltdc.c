@@ -4,7 +4,6 @@
  * Author(s): Philippe Cornu <philippe.cornu@st.com> for STMicroelectronics.
  *	      Yannick Fertre <yannick.fertre@st.com> for STMicroelectronics.
  */
-
 #define LOG_CATEGORY UCLASS_VIDEO
 
 #include <common.h>
@@ -13,13 +12,31 @@
 #include <dm.h>
 #include <log.h>
 #include <panel.h>
+#include <regmap.h>
 #include <reset.h>
+#include <syscon.h>
 #include <video.h>
 #include <video_bridge.h>
 #include <asm/io.h>
 #include <dm/device-internal.h>
+#include <dm/uclass-internal.h>
 #include <dm/device_compat.h>
+#include <dm/pinctrl.h>
 #include <linux/bitops.h>
+
+#if CONFIG_IS_ENABLED(ARCH_STM32MP)
+/* direct access to RIFSC function, waiting firewall uclass */
+#include <mach/rif.h>
+static int stm32_check_access_by_id(ofnode device_node, u32 id)
+{
+	return stm32_rifsc_check_access_by_id(device_node, id);
+}
+#else
+static int stm32_check_access_by_id(ofnode device_node, u32 id)
+{
+	return -EACCES;
+}
+#endif
 
 struct stm32_ltdc_priv {
 	void __iomem *regs;
@@ -30,6 +47,8 @@ struct stm32_ltdc_priv {
 	u32 crop_x, crop_y, crop_w, crop_h;
 	u32 alpha;
 	u32 hw_version;
+	struct udevice *bridge;
+	struct udevice *panel;
 };
 
 /* Layer register offsets */
@@ -154,6 +173,9 @@ static const u32 layer_regs_a2[] = {
 #define LTDC_LIPCR	0x40	/* Line Interrupt Position Conf. */
 #define LTDC_CPSR	0x44	/* Current Position Status */
 #define LTDC_CDSR	0x48	/* Current Display Status */
+#define LTDC_RB0AR	0x80	/* Rotation Buffer 0 address */
+#define LTDC_RB1AR	0x84	/* Rotation Buffer 1 address */
+#define LTDC_RBPR	0x88	/* Rotation Buffer Pitch */
 
 /* Layer register offsets */
 #define LTDC_L1C0R	(priv->layer_regs[0])	/* L1 configuration 0 */
@@ -177,6 +199,12 @@ static const u32 layer_regs_a2[] = {
 #define LTDC_L1AFBLR	(priv->layer_regs[18])	/* L1 auxiliary frame buffer length */
 #define LTDC_L1AFBLNR	(priv->layer_regs[19])	/* L1 auxiliary frame buffer line number */
 #define LTDC_L1CLUTWR	(priv->layer_regs[20])	/* L1 CLUT write */
+#define LTDC_L1SISR	(priv->layer_regs[21])	/* L1 scaler input size */
+#define LTDC_L1SOSR	(priv->layer_regs[22])	/* L1 scaler output size */
+#define LTDC_L1SVSFR	(priv->layer_regs[23])	/* L1 scaler vertical scaling factor */
+#define LTDC_L1SVSPR	(priv->layer_regs[24])	/* L1 scaler vertical scaling phase */
+#define LTDC_L1SHSFR	(priv->layer_regs[25])	/* L1 scaler horizontal scaling factor */
+#define LTDC_L1SHSPR	(priv->layer_regs[26])	/* L1 scaler horizontal scaling phase */
 #define LTDC_L1CYR0R	(priv->layer_regs[27])	/* L1 Conversion YCbCr RGB 0 */
 #define LTDC_L1CYR1R	(priv->layer_regs[28])	/* L1 Conversion YCbCr RGB 1 */
 #define LTDC_L1FPF0R	(priv->layer_regs[29])	/* L1 Flexible Pixel Format 0 */
@@ -196,6 +224,7 @@ static const u32 layer_regs_a2[] = {
 #define TWCR_TOTALW	GENMASK(27, 16)	/* TOTAL Width */
 
 #define GCR_LTDCEN	BIT(0)		/* LTDC ENable */
+#define GCR_ROTEN	BIT(2)		/* ROTation ENable */
 #define GCR_DEN		BIT(16)		/* Dither ENable */
 #define GCR_PCPOL	BIT(28)		/* Pixel Clock POLarity-Inverted */
 #define GCR_DEPOL	BIT(29)		/* Data Enable POLarity-High */
@@ -232,6 +261,8 @@ static const u32 layer_regs_a2[] = {
 #define LXCR_LEN	BIT(0)		/* Layer ENable */
 #define LXCR_COLKEN	BIT(1)		/* Color Keying Enable */
 #define LXCR_CLUTEN	BIT(4)		/* Color Look-Up Table ENable */
+#define LXCR_HMEN	BIT(8)		/* Horizontal Mirroring ENable */
+#define LXCR_SCEN	BIT(10)		/* SCaler ENable */
 
 #define LXWHPCR_WHSTPOS	GENMASK(11, 0)	/* Window Horizontal StarT POSition */
 #define LXWHPCR_WHSPPOS	GENMASK(27, 16)	/* Window Horizontal StoP POSition */
@@ -262,6 +293,11 @@ static const u32 layer_regs_a2[] = {
 #define HWVER_10300 0x010300
 #define HWVER_20101 0x020101
 #define HWVER_40100 0x040100
+#define HWVER_40101 0x040101
+
+#define SYSCFG_DISPLAYCLKCR 0x5000
+#define DISPLAYCLKCR_LVDS	0x01
+#define DISPLAYCLKCR_DPI	0x02
 
 enum stm32_ltdc_pix_fmt {
 	PF_ARGB8888 = 0,	/* ARGB [32 bits] */
@@ -369,13 +405,25 @@ static void stm32_ltdc_enable(struct stm32_ltdc_priv *priv)
 	setbits_le32(priv->regs + LTDC_GCR, GCR_LTDCEN);
 }
 
-static void stm32_ltdc_set_mode(struct stm32_ltdc_priv *priv,
+static void stm32_ltdc_set_mode(struct udevice *dev,
 				struct display_timing *timings)
 {
+	struct stm32_ltdc_priv *priv = dev_get_priv(dev);
 	void __iomem *regs = priv->regs;
 	u32 hsync, vsync, acc_hbp, acc_vbp, acc_act_w, acc_act_h;
+	u32 pitch, rota0_buf, rota1_buf;
 	u32 total_w, total_h;
+	u32 out_values[4];
+	u32 rotation;
+	u32 phandle;
+	u32 base;
 	u32 val;
+	int size;
+	ofnode remote;
+
+	/* Rotation supported only by mp25 SOCs */
+	if (ofnode_device_is_compatible(dev_ofnode(dev), "st,stm32mp25-ltdc"))
+		rotation = dev_read_u32_default(priv->panel, "rotation", 0);
 
 	/* Convert video timings to ltdc timings */
 	hsync = timings->hsync_len.typ - 1;
@@ -387,23 +435,99 @@ static void stm32_ltdc_set_mode(struct stm32_ltdc_priv *priv,
 	total_w = acc_act_w + timings->hfront_porch.typ;
 	total_h = acc_act_h + timings->vfront_porch.typ;
 
-	/* Synchronization sizes */
-	val = (hsync << 16) | vsync;
-	clrsetbits_le32(regs + LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+	/* check that an output rotation is required */
+	if (rotation == 90 || rotation == 270) {
+		if (ofnode_read_u32(dev_ofnode(dev), "rotation-memory", &phandle)) {
+			dev_err(dev, "%s(%s): Could not find rotation-memory property\n",
+				__func__, dev_read_name(dev));
+			return;
+		}
 
-	/* Accumulated back porch */
-	val = (acc_hbp << 16) | acc_vbp;
-	clrsetbits_le32(regs + LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+		remote = ofnode_get_by_phandle(phandle);
+		if (!ofnode_valid(remote)) {
+			dev_err(dev, "%s(%s): Could not get rotation memory handle\n",
+				__func__, dev_read_name(dev));
+			return;
+		}
 
-	/* Accumulated active width */
-	val = (acc_act_w << 16) | acc_act_h;
-	clrsetbits_le32(regs + LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+		if (ofnode_read_u32_array(remote, "reg", out_values, 4)) {
+			dev_err(dev, "%s(%s): Could not get rotation memory reg property\n",
+				__func__, dev_read_name(dev));
+			return;
+		}
 
-	/* Total width & height */
-	val = (total_w << 16) | total_h;
-	clrsetbits_le32(regs + LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+		/* get base & size of memory rotation buffer */
+		base = out_values[1];
+		size = out_values[3];
 
-	setbits_le32(regs + LTDC_LIPCR, acc_act_h + 1);
+		/*
+		 * Size of the rotation buffer must be larger than the size
+		 * of two frames (format RGB24).
+		 */
+		if (size <  timings->hactive.typ *  timings->vactive.typ * 2 * 3) {
+			dev_err(dev, "%s(%s): Rotation buffer too small: %d\n",
+				__func__, dev_read_name(dev), size);
+			return;
+		}
+
+		/* Panel width should not exceed 1366 pixels */
+		if (timings->hactive.typ > 1366) {
+			dev_err(dev, "%s(%s): Panel width should not exceed 1366 pixels: %d\n",
+				__func__, dev_read_name(dev), size);
+			return;
+		}
+
+		rota0_buf = (u32)base;
+		rota1_buf = (u32)base + (size >> 1);
+
+		writel(rota0_buf, regs + LTDC_RB0AR);
+		writel(rota1_buf, regs + LTDC_RB1AR);
+
+		/*
+		 * LTDC_RBPR register is used define the pitch (line-to-line address increment)
+		 * of the stored rotation buffer. The pitch is proportional to the width of the
+		 * composed display (before rotation) and,(after rotation) proportional to the
+		 * non-raster dimension of the display panel.
+		 */
+		pitch = ((timings->hactive.typ - 1 + 9) / 10) * 64;
+		writel(pitch, regs + LTDC_RBPR);
+
+		/* Synchronization sizes */
+		val = (vsync << 16) | hsync;
+		clrsetbits_le32(regs + LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+
+		/* Accumulated back porch */
+		val = (acc_vbp << 16) | acc_hbp;
+		clrsetbits_le32(regs + LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+
+		/* Accumulated active width */
+		val = (acc_act_h << 16) | acc_act_w;
+		clrsetbits_le32(regs + LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+
+		/* Total width & height */
+		val = (total_h << 16) | total_w;
+		clrsetbits_le32(regs + LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+
+		setbits_le32(regs + LTDC_LIPCR, acc_act_w + 1);
+	} else {
+		/* Synchronization sizes */
+		val = (hsync << 16) | vsync;
+		clrsetbits_le32(regs + LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+
+		/* Accumulated back porch */
+		val = (acc_hbp << 16) | acc_vbp;
+		clrsetbits_le32(regs + LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+
+		/* Accumulated active width */
+		val = (acc_act_w << 16) | acc_act_h;
+		clrsetbits_le32(regs + LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+
+		/* Total width & height */
+		val = (total_w << 16) | total_h;
+		clrsetbits_le32(regs + LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+
+		setbits_le32(regs + LTDC_LIPCR, acc_act_h + 1);
+	}
 
 	/* Signal polarities */
 	val = 0;
@@ -416,6 +540,10 @@ static void stm32_ltdc_set_mode(struct stm32_ltdc_priv *priv,
 		val |= GCR_DEPOL;
 	if (timings->flags & DISPLAY_FLAGS_PIXDATA_NEGEDGE)
 		val |= GCR_PCPOL;
+
+	if (rotation == 90 || rotation == 270)
+		val |= GCR_ROTEN;
+
 	clrsetbits_le32(regs + LTDC_GCR,
 			GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL, val);
 
@@ -423,32 +551,48 @@ static void stm32_ltdc_set_mode(struct stm32_ltdc_priv *priv,
 	writel(priv->bg_col_argb, priv->regs + LTDC_BCCR);
 }
 
-static void stm32_ltdc_set_layer1(struct stm32_ltdc_priv *priv, ulong fb_addr)
+static void stm32_ltdc_set_layer1(struct udevice *dev, ulong fb_addr)
 {
+	struct stm32_ltdc_priv *priv = dev_get_priv(dev);
 	void __iomem *regs = priv->regs;
 	u32 x0, x1, y0, y1;
 	u32 pitch_in_bytes;
 	u32 line_length;
 	u32 bus_width;
-	u32 val, tmp, bpp;
+	u32 val, avbp, ahbp, bpp;
 	u32 format;
+	u32 rotation;
 
 	x0 = priv->crop_x;
 	x1 = priv->crop_x + priv->crop_w - 1;
 	y0 = priv->crop_y;
 	y1 = priv->crop_y + priv->crop_h - 1;
 
-	/* Horizontal start and stop position */
-	tmp = (readl(regs + LTDC_BPCR) & BPCR_AHBP) >> 16;
-	val = ((x1 + 1 + tmp) << 16) + (x0 + 1 + tmp);
-	clrsetbits_le32(regs + LTDC_L1WHPCR, LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS,
-			val);
+	if (ofnode_device_is_compatible(dev_ofnode(dev), "st,stm32mp25-ltdc"))
+		rotation = dev_read_u32_default(priv->panel, "rotation", 0);
 
-	/* Vertical start & stop position */
-	tmp = readl(regs + LTDC_BPCR) & BPCR_AVBP;
-	val = ((y1 + 1 + tmp) << 16) + (y0 + 1 + tmp);
-	clrsetbits_le32(regs + LTDC_L1WVPCR, LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS,
-			val);
+	/* check that an output rotation is required */
+	if (rotation == 90 || rotation == 270) {
+		/* Horizontal start and stop position */
+		ahbp = (readl(regs + LTDC_BPCR) & BPCR_AVBP);
+		val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
+		clrsetbits_le32(regs + LTDC_L1WHPCR, LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+
+		/* Vertical start & stop position */
+		avbp = (readl(regs + LTDC_BPCR) & BPCR_AHBP) >> 16;
+		val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
+		clrsetbits_le32(regs + LTDC_L1WVPCR, LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS,	val);
+	} else {
+		/* Horizontal start and stop position */
+		ahbp = (readl(regs + LTDC_BPCR) & BPCR_AHBP) >> 16;
+		val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
+		clrsetbits_le32(regs + LTDC_L1WHPCR, LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+
+		/* Vertical start & stop position */
+		avbp = readl(regs + LTDC_BPCR) & BPCR_AVBP;
+		val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
+		clrsetbits_le32(regs + LTDC_L1WVPCR, LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS,	val);
+	}
 
 	/* Layer background color */
 	writel(priv->bg_col_argb, regs + LTDC_L1DCCR);
@@ -458,7 +602,11 @@ static void stm32_ltdc_set_layer1(struct stm32_ltdc_priv *priv, ulong fb_addr)
 	pitch_in_bytes = priv->crop_w * (bpp >> 3);
 	bus_width = 8 << ((readl(regs + LTDC_GC2R) & GC2R_BW) >> 4);
 	line_length = ((bpp >> 3) * priv->crop_w) + (bus_width >> 3) - 1;
-	val = (pitch_in_bytes << 16) | line_length;
+	if (rotation == 270 || rotation == 180)
+		/* Compute negative value (signed on 16 bits) for the picth */
+		val = ((0x10000 - pitch_in_bytes) << 16) | line_length;
+	else
+		val = (pitch_in_bytes << 16) | line_length;
 	clrsetbits_le32(regs + LTDC_L1CFBLR, LXCFBLR_CFBLL | LXCFBLR_CFBP, val);
 
 	/* Pixel format */
@@ -488,10 +636,155 @@ static void stm32_ltdc_set_layer1(struct stm32_ltdc_priv *priv, ulong fb_addr)
 	clrsetbits_le32(regs + LTDC_L1CFBLNR, LXCFBLNR_CFBLN, priv->crop_h);
 
 	/* Frame buffer address */
-	writel(fb_addr, regs + LTDC_L1CFBAR);
+	switch (rotation) {
+	case 270:
+		writel(fb_addr + (pitch_in_bytes * (y1 - y0 + 1) - 1), regs + LTDC_L1CFBAR);
+		break;
+	case 180:
+		writel(fb_addr + (pitch_in_bytes * (y1 - y0 + 1) - 1) +
+		       (bpp >> 3) * (x1 - x0 + 1) - 1, regs + LTDC_L1CFBAR);
+		break;
+	case 90:
+		writel(fb_addr + (bpp >> 3) * (x1 - x0 + 1) - 1, regs + LTDC_L1CFBAR);
+		break;
+	default:
+		writel(fb_addr, regs + LTDC_L1CFBAR);
+	}
 
-	/* Enable layer 1 */
-	setbits_le32(priv->regs + LTDC_L1CR, LXCR_LEN);
+	/* Enable layer 1 & set mirroring */
+	if (rotation == 90 || rotation == 180)
+		setbits_le32(priv->regs + LTDC_L1CR, LXCR_LEN | LXCR_HMEN);
+	else
+		setbits_le32(priv->regs + LTDC_L1CR, LXCR_LEN);
+}
+
+static int stm32_ltdc_get_panel(struct udevice *dev, struct udevice **panel)
+{
+	ofnode ep_node, node, ports, remote;
+	u32 phandle;
+	int ret = 0;
+
+	if (!dev)
+		return -EINVAL;
+
+	ports = ofnode_find_subnode(dev_ofnode(dev), "ports");
+	if (!ofnode_valid(ports)) {
+		dev_err(dev, "Remote bridge subnode\n");
+		return ret;
+	}
+
+	for (node = ofnode_first_subnode(ports);
+	     ofnode_valid(node);
+	     node = dev_read_next_subnode(node)) {
+		ep_node = ofnode_first_subnode(node);
+		if (!ofnode_valid(ep_node))
+			continue;
+
+		ret = ofnode_read_u32(ep_node, "remote-endpoint", &phandle);
+		if (ret) {
+			dev_err(dev, "%s(%s): Could not find remote-endpoint property\n",
+				__func__, dev_read_name(dev));
+			return ret;
+		}
+
+		remote = ofnode_get_by_phandle(phandle);
+		if (!ofnode_valid(remote))
+			return -EINVAL;
+
+		while (ofnode_valid(remote)) {
+			remote = ofnode_get_parent(remote);
+			if (!ofnode_valid(remote)) {
+				dev_dbg(dev, "%s(%s): no UCLASS_DISPLAY for remote-endpoint\n",
+					__func__, dev_read_name(dev));
+				continue;
+			}
+
+			uclass_find_device_by_ofnode(UCLASS_PANEL, remote, panel);
+			if (*panel)
+				if (ofnode_valid(dev_ofnode(*panel)))
+					return 0;
+		};
+	}
+
+	/* Sanity check, we can get out of the loop without having a clean ofnode */
+	if (!(*panel))
+		ret = -EINVAL;
+
+	return ret;
+}
+
+static int stm32_ltdc_display_init(struct udevice *dev, ofnode *ep_node,
+				   struct udevice **panel, struct udevice **bridge)
+{
+	ofnode remote;
+	u32 phandle;
+	int ret;
+
+	if (*panel)
+		return -EINVAL;
+
+	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
+		ret = ofnode_read_u32(*ep_node, "remote-endpoint", &phandle);
+		if (ret) {
+			dev_dbg(dev, "%s(%s): Could not find remote-endpoint property\n",
+				__func__, dev_read_name(dev));
+			return ret;
+		}
+
+		remote = ofnode_get_by_phandle(phandle);
+		if (!ofnode_valid(remote))
+			return -EINVAL;
+
+		while (ofnode_valid(remote)) {
+			remote = ofnode_get_parent(remote);
+			if (!ofnode_valid(remote)) {
+				dev_dbg(dev, "%s(%s): no UCLASS_VIDEO_BRIDGE for remote-endpoint\n",
+					__func__, dev_read_name(dev));
+				return -EINVAL;
+			}
+
+			uclass_find_device_by_ofnode(UCLASS_VIDEO_BRIDGE, remote, bridge);
+			if (*bridge && !ret) {
+				ret = uclass_get_device_by_ofnode(UCLASS_VIDEO_BRIDGE,
+								  remote, bridge);
+				if (ret)
+					dev_dbg(dev,
+						"No video bridge, or no backlight on bridge\n");
+				break;
+			}
+		}
+
+		ret = stm32_ltdc_get_panel(*bridge, panel);
+	} else {
+		/* no bridge , search a panel from display controller node */
+		ret = ofnode_read_u32(*ep_node, "remote-endpoint", &phandle);
+		if (ret) {
+			dev_dbg(dev, "%s(%s): Could not find remote-endpoint property\n",
+				__func__, dev_read_name(dev));
+			return ret;
+		}
+
+		remote = ofnode_get_by_phandle(phandle);
+		if (!ofnode_valid(remote))
+			return -EINVAL;
+
+		while (ofnode_valid(remote)) {
+			remote = ofnode_get_parent(remote);
+			if (!ofnode_valid(remote)) {
+				dev_dbg(dev, "%s(%s): no UCLASS_VIDEO_BRIDGE for remote-endpoint\n",
+					__func__, dev_read_name(dev));
+				return -EINVAL;
+			}
+
+			ret = uclass_find_device_by_ofnode(UCLASS_PANEL, remote, panel);
+			if (*panel && !ret) {
+				ret = uclass_get_device_by_ofnode(UCLASS_PANEL, remote, panel);
+				break;
+			}
+		}
+	}
+
+	return ret;
 }
 
 static int stm32_ltdc_probe(struct udevice *dev)
@@ -499,13 +792,79 @@ static int stm32_ltdc_probe(struct udevice *dev)
 	struct video_uc_plat *uc_plat = dev_get_uclass_plat(dev);
 	struct video_priv *uc_priv = dev_get_uclass_priv(dev);
 	struct stm32_ltdc_priv *priv = dev_get_priv(dev);
-	struct udevice *bridge = NULL;
-	struct udevice *panel = NULL;
 	struct display_timing timings;
-	struct clk pclk;
+	struct clk pclk, bclk;
 	struct reset_ctl rst;
+	struct regmap *regmap = NULL;
+	struct udevice *syscon;
+	ofnode node, port;
 	ulong rate;
-	int ret;
+	int ret, idx;
+
+	if (IS_ENABLED(CONFIG_STM32MP25X) || IS_ENABLED(CONFIG_STM32MP23X) ||
+	    IS_ENABLED(CONFIG_STM32MP21X)) {
+		struct ofnode_phandle_args args;
+
+		node = dev_ofnode(dev);
+
+		idx = ofnode_stringlist_search(node, "access-controller-names", "cmn");
+		if (idx < 0)
+			return idx;
+
+		ret = ofnode_parse_phandle_with_args(node, "access-controllers",
+						     "#access-controller-cells",
+						     0, idx, &args);
+		if (ret < 0) {
+			dev_err(dev, "Can not get access-controllers to common registers\n");
+			return ret;
+		}
+
+		ret = stm32_check_access_by_id(dev_ofnode(dev), args.args[0]);
+		if (ret < 0) {
+			dev_err(dev, "Fail to get access to common registers\n");
+			return ret;
+		}
+
+		node = dev_read_subnode(dev, "l1l2");
+
+		idx = ofnode_stringlist_search(node, "access-controller-names", "l1l2");
+		if (idx < 0)
+			return idx;
+
+		ret = ofnode_parse_phandle_with_args(node, "access-controllers",
+						     "#access-controller-cells",
+						     0, idx, &args);
+		if (ret < 0) {
+			dev_err(dev, "Can not get access-controllers to l1l2 registers\n");
+			return ret;
+		}
+
+		ret = stm32_check_access_by_id(dev_ofnode(dev), args.args[0]);
+		if (ret < 0) {
+			dev_err(dev, "Fail to get access to l1l2 registers\n");
+			return ret;
+		}
+	}
+
+	if (IS_ENABLED(CONFIG_SYSCON) &&
+	    (IS_ENABLED(CONFIG_STM32MP25X) || IS_ENABLED(CONFIG_STM32MP23X))) {
+		ret = uclass_get_device_by_phandle(UCLASS_SYSCON, dev, "st,syscon", &syscon);
+		if (ret) {
+			if (ret != -ENOENT) {
+				dev_err(dev, "unable to find syscon device\n");
+				return ret;
+			}
+		} else {
+			regmap = syscon_get_regmap(syscon);
+			if (IS_ERR(regmap)) {
+				dev_err(dev, "Fail to get Syscon regmap\n");
+				return PTR_ERR(regmap);
+			}
+
+			/* Set default pixel clock to enable register access */
+			regmap_write(regmap, SYSCFG_DISPLAYCLKCR, DISPLAYCLKCR_DPI);
+		}
+	}
 
 	priv->regs = dev_read_addr_ptr(dev);
 	if (!priv->regs) {
@@ -513,7 +872,21 @@ static int stm32_ltdc_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
-	ret = clk_get_by_index(dev, 0, &pclk);
+	ret = clk_get_by_name(dev, "bus", &bclk);
+	if (ret) {
+		if (ret != -ENODATA) {
+			dev_err(dev, "bus clock get error %d\n", ret);
+			return ret;
+		}
+	} else {
+		ret = clk_enable(&bclk);
+		if (ret) {
+			dev_err(dev, "bus clock enable error %d\n", ret);
+			return ret;
+		}
+	}
+
+	ret = clk_get_by_name(dev, "lcd", &pclk);
 	if (ret) {
 		dev_err(dev, "peripheral clock get error %d\n", ret);
 		return ret;
@@ -526,7 +899,7 @@ static int stm32_ltdc_probe(struct udevice *dev)
 	}
 
 	priv->hw_version = readl(priv->regs + LTDC_IDR);
-	debug("%s: LTDC hardware 0x%x\n", __func__, priv->hw_version);
+	dev_dbg(dev, "%s: LTDC hardware 0x%x\n", __func__, priv->hw_version);
 
 	switch (priv->hw_version) {
 	case HWVER_10200:
@@ -539,6 +912,7 @@ static int stm32_ltdc_probe(struct udevice *dev)
 		priv->pix_fmt_hw = pix_fmt_a1;
 		break;
 	case HWVER_40100:
+	case HWVER_40101:
 		priv->layer_regs = layer_regs_a2;
 		priv->pix_fmt_hw = pix_fmt_a2;
 		break;
@@ -546,16 +920,40 @@ static int stm32_ltdc_probe(struct udevice *dev)
 		return -ENODEV;
 	}
 
-	ret = uclass_first_device_err(UCLASS_PANEL, &panel);
-	if (ret) {
-		if (ret != -ENODEV)
-			dev_err(dev, "panel device error %d\n", ret);
-		return ret;
+	/*
+	 * Try all the ports until one working.
+	 *
+	 * This means that it will search first for the DSI node
+	 * and then for the LVDS.
+	 * This is done in two times. First is checks for the
+	 * UCLASS_VIDEO_BRIDGE available, and then for this bridge
+	 * it scans for a UCLASS_PANEL.
+	 */
+
+	port = dev_read_subnode(dev, "port");
+	if (!ofnode_valid(port)) {
+		dev_err(dev, "%s(%s): 'port' subnode not found\n",
+			__func__, dev_read_name(dev));
+		return -EINVAL;
 	}
 
-	ret = panel_get_display_timing(panel, &timings);
+	for (node = ofnode_first_subnode(port);
+	     ofnode_valid(node);
+	     node = dev_read_next_subnode(node)) {
+		ret = stm32_ltdc_display_init(dev, &node, &priv->panel, &priv->bridge);
+		if (ret)
+			dev_dbg(dev, "Device failed ret=%d\n", ret);
+		else
+			break;
+	}
+
+	/* Sanity check */
+	if (ret)
+		return ret;
+
+	ret = panel_get_display_timing(priv->panel, &timings);
 	if (ret) {
-		ret = ofnode_decode_display_timing(dev_ofnode(panel),
+		ret = ofnode_decode_display_timing(dev_ofnode(priv->panel),
 						   0, &timings);
 		if (ret) {
 			dev_err(dev, "decode display timing error %d\n", ret);
@@ -581,17 +979,26 @@ static int stm32_ltdc_probe(struct udevice *dev)
 	reset_deassert(&rst);
 
 	if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		ret = uclass_get_device(UCLASS_VIDEO_BRIDGE, 0, &bridge);
-		if (ret)
-			dev_dbg(dev,
-				"No video bridge, or no backlight on bridge\n");
+		if (priv->bridge) {
+			/* Set the pixel clock according to the encoder */
+			if (IS_ENABLED(CONFIG_SYSCON) &&
+			    (IS_ENABLED(CONFIG_STM32MP25X) || IS_ENABLED(CONFIG_STM32MP23X))) {
+				if (!strcmp(priv->bridge->name, "stm32-display-dsi"))
+					regmap_write(regmap, SYSCFG_DISPLAYCLKCR,
+						     DISPLAYCLKCR_DPI);
+				else if (!strncmp(priv->bridge->name, "lvds", 4))
+					regmap_write(regmap, SYSCFG_DISPLAYCLKCR,
+						     DISPLAYCLKCR_LVDS);
+			}
 
-		if (bridge) {
-			ret = video_bridge_attach(bridge);
+			ret = video_bridge_attach(priv->bridge);
 			if (ret) {
-				dev_err(bridge, "fail to attach bridge\n");
+				dev_dbg(priv->bridge, "fail to attach bridge\n");
 				return ret;
 			}
+
+			/* set state the pinctrl to sleep to avoid noise */
+			pinctrl_select_state(dev, "sleep");
 		}
 	}
 
@@ -612,23 +1019,23 @@ static int stm32_ltdc_probe(struct udevice *dev)
 		priv->bg_col_argb, priv->alpha);
 
 	/* Configure & start LTDC */
-	stm32_ltdc_set_mode(priv, &timings);
-	stm32_ltdc_set_layer1(priv, uc_plat->base);
+	stm32_ltdc_set_mode(dev, &timings);
+	stm32_ltdc_set_layer1(dev, uc_plat->base);
 	stm32_ltdc_enable(priv);
 
 	uc_priv->xsize = timings.hactive.typ;
 	uc_priv->ysize = timings.vactive.typ;
 	uc_priv->bpix = priv->l2bpp;
 
-	if (!bridge) {
-		ret = panel_enable_backlight(panel);
+	if (!priv->bridge) {
+		ret = panel_enable_backlight(priv->panel);
 		if (ret) {
 			dev_err(dev, "panel %s enable backlight error %d\n",
-				panel->name, ret);
+				priv->panel->name, ret);
 			return ret;
 		}
 	} else if (IS_ENABLED(CONFIG_VIDEO_BRIDGE)) {
-		ret = video_bridge_set_backlight(bridge, 80);
+		ret = video_bridge_set_backlight(priv->bridge, 80);
 		if (ret) {
 			dev_err(dev, "fail to set backlight\n");
 			return ret;
@@ -657,6 +1064,8 @@ static int stm32_ltdc_bind(struct udevice *dev)
 
 static const struct udevice_id stm32_ltdc_ids[] = {
 	{ .compatible = "st,stm32-ltdc" },
+	{ .compatible = "st,stm32mp21-ltdc" },
+	{ .compatible = "st,stm32mp25-ltdc" },
 	{ }
 };
 

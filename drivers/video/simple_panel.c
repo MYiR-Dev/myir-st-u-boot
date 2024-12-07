@@ -151,6 +151,8 @@ static const struct udevice_id simple_panel_ids[] = {
 	{ .compatible = "boe,nv101wxmn51" },
 	{ .compatible = "panasonic,vvx10f004b00",
 	  .data = PANASONIC_VVX10F004B00 },
+	{ .compatible = "panel-dpi" },
+	{ .compatible = "panel-lvds" },
 	{ }
 };
 

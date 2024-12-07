@@ -35,9 +35,9 @@ config ENV_SIZE
 
 choice
 	prompt "Select STMicroelectronics STM32MPxxx Soc"
-	default STM32MP15x
+	default STM32MP15X
 
-config STM32MP13x
+config STM32MP13X
 	bool "Support STMicroelectronics STM32MP13x Soc"
 	select ARM_SMCCC
 	select CPU_V7A
@@ -47,15 +47,15 @@ config STM32MP13x
 	select OF_BOARD_SETUP
 	select PINCTRL_STM32
 	select STM32_RCC
-	select STM32_RESET
 	select STM32_SERIAL
+	select STM32MP_TAMP_NVMEM
 	select SYS_ARCH_TIMER
 	imply CMD_NVEDIT_INFO
 	help
 		support of STMicroelectronics SOC STM32MP13x family
 		STMicroelectronics MPU with core ARMv7
 
-config STM32MP15x
+config STM32MP15X
 	bool "Support STMicroelectronics STM32MP15x Soc"
 	select ARCH_SUPPORT_PSCI
 	select BINMAN
@@ -66,8 +66,8 @@ config STM32MP15x
 	select OF_BOARD_SETUP
 	select PINCTRL_STM32
 	select STM32_RCC
-	select STM32_RESET
 	select STM32_SERIAL
+	select STM32MP_TAMP_NVMEM
 	select SUPPORT_SPL
 	select SYS_ARCH_TIMER
 	imply CMD_NVEDIT_INFO
@@ -76,6 +76,83 @@ config STM32MP15x
 		STM32MP157, STM32MP153 or STM32MP151
 		STMicroelectronics MPU with core ARMv7
 		dual core A7 for STM32MP157/3, monocore for STM32MP151
+
+config STM32MP21X
+	bool "Support STMicroelectronics STM32MP21X Soc"
+	select ARM64
+	select CLK_STM32MP21
+	select OF_BOARD
+	select OF_BOARD_SETUP
+	select PINCTRL_STM32
+	select STM32_RCC
+	select STM32_RESET
+	select STM32_SERIAL
+	select STM32MP_TAMP_NVMEM
+	select SYS_ARCH_TIMER
+	select TFABOOT
+	imply CLK_SCMI
+	imply CMD_NVEDIT_INFO
+	imply DM_REGULATOR
+	imply DM_REGULATOR_SCMI
+	imply OPTEE
+	imply RESET_SCMI
+	imply SYSRESET_PSCI
+	imply TEE
+	imply VERSION_VARIABLE
+	help
+		Support of STMicroelectronics SOC STM32MP21X family
+		STMicroelectronics MPU with 1 A35 core and 1 M33 core
+
+config STM32MP23X
+	bool "Support STMicroelectronics STM32MP23x Soc"
+	select ARM64
+	select CLK_STM32MP25
+	select OF_BOARD
+	select OF_BOARD_SETUP
+	select PINCTRL_STM32
+	select STM32_RCC
+	select STM32_RESET
+	select STM32_SERIAL
+	select STM32MP_TAMP_NVMEM
+	select SYS_ARCH_TIMER
+	select TFABOOT
+	imply CLK_SCMI
+	imply CMD_NVEDIT_INFO
+	imply DM_REGULATOR
+	imply DM_REGULATOR_SCMI
+	imply OPTEE
+	imply RESET_SCMI
+	imply SYSRESET_PSCI
+	imply TEE
+	imply VERSION_VARIABLE
+	help
+		Support of STMicroelectronics SOC STM32MP23x family
+		STMicroelectronics MPU with 2 * A53 core and 1 M33 core
+
+config STM32MP25X
+	bool "Support STMicroelectronics STM32MP25x Soc"
+	select ARM64
+	select CLK_STM32MP25
+	select OF_BOARD
+	select OF_BOARD_SETUP
+	select PINCTRL_STM32
+	select STM32_RCC
+	select STM32_SERIAL
+	select STM32MP_TAMP_NVMEM
+	select SYS_ARCH_TIMER
+	select TFABOOT
+	imply CLK_SCMI
+	imply CMD_NVEDIT_INFO
+	imply DM_REGULATOR
+	imply DM_REGULATOR_SCMI
+	imply OPTEE
+	imply RESET_SCMI
+	imply SYSRESET_PSCI
+	imply TEE
+	imply VERSION_VARIABLE
+	help
+		Support of STMicroelectronics SOC STM32MP25x family
+		STMicroelectronics MPU with 2 * A53 core and 1 M33 core
 endchoice
 
 config NR_DRAM_BANKS
@@ -84,6 +161,7 @@ config NR_DRAM_BANKS
 config DDR_CACHEABLE_SIZE
 	hex "Size of the DDR marked cacheable in pre-reloc stage"
 	default 0x40000000
+	depends on STM32MP15X || STM32MP13X
 	help
 		Define the size of the DDR marked as cacheable in U-Boot
 		pre-reloc stage.
@@ -101,14 +179,6 @@ config SYS_MMCSD_RAW_MODE_U_BOOT_PARTITION_MMC2
 	  Partition on the second MMC to load U-Boot from when the MMC is being
 	  used in raw mode
 
-config STM32_ETZPC
-	bool "STM32 Extended TrustZone Protection"
-	depends on STM32MP15x || STM32MP13x
-	default y
-	imply BOOTP_SERVERIP
-	help
-	  Say y to enable STM32 Extended TrustZone Protection
-
 config STM32_ECDSA_VERIFY
 	bool "STM32 ECDSA verification via the ROM API"
 	depends on SPL_ECDSA_VERIFY
@@ -117,6 +187,15 @@ config STM32_ECDSA_VERIFY
 	  Say y to enable the uclass driver for ECDSA verification using the
 	  ROM API provided on STM32MP.
 	  The ROM API is only available during SPL for now.
+
+config STM32MP_TAMP_NVMEM
+	bool "STM32 TAMP backup registers via NVMEM API"
+	select NVMEM
+	default y
+	help
+	  Say y to enable the uclass driver for TAMP Backup registers using the
+	  NVMEM API. It allows to access to boot mode or others shared information
+	  between software components/execution levels.
 
 config CMD_STM32KEY
 	bool "command stm32key to fuse public key hash"
@@ -128,6 +207,8 @@ config CMD_STM32KEY
 
 source "arch/arm/mach-stm32mp/Kconfig.13x"
 source "arch/arm/mach-stm32mp/Kconfig.15x"
-
+source "arch/arm/mach-stm32mp/Kconfig.21x"
+source "arch/arm/mach-stm32mp/Kconfig.23x"
+source "arch/arm/mach-stm32mp/Kconfig.25x"
 source "arch/arm/mach-stm32mp/cmd_stm32prog/Kconfig"
 endif

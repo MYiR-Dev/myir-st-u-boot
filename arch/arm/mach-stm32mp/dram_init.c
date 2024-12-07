@@ -7,6 +7,7 @@
 
 #include <common.h>
 #include <dm.h>
+#include <efi_loader.h>
 #include <image.h>
 #include <init.h>
 #include <lmb.h>
@@ -24,8 +25,16 @@ int dram_init(void)
 	int ret;
 
 	ret = uclass_get_device(UCLASS_RAM, 0, &dev);
-	if (ret) {
-		log_debug("RAM init failed: %d\n", ret);
+	/* in case there is no RAM driver, retrieve DDR size from DT */
+	if (ret == -ENODEV) {
+		ret = fdtdec_setup_mem_size_base();
+		if (ret)
+			return ret;
+		if (gd->ram_size > STM32_DDR_SIZE)
+			return -EINVAL;
+		return 0;
+	} else if (ret) {
+		log_err("RAM init failed: %d\n", ret);
 		return ret;
 	}
 	ret = ram_get_info(dev, &ram);
@@ -33,7 +42,7 @@ int dram_init(void)
 		log_debug("Cannot get RAM size: %d\n", ret);
 		return ret;
 	}
-	log_debug("RAM init base=%lx, size=%x\n", ram.base, ram.size);
+	log_debug("RAM init base=%p, size=%zx\n", (void *)ram.base, ram.size);
 
 	gd->ram_size = ram.size;
 
@@ -49,9 +58,15 @@ phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 	if (!total_size)
 		return gd->ram_top;
 
+	/*
+	 * make sure U-Boot uses address space below 4GB boundaries even
+	 * if the effective available memory is bigger
+	 */
+	gd->ram_top = clamp_val((gd->ram_base + gd->ram_size), 0, SZ_4G - 1);
+
 	/* found enough not-reserved memory to relocated U-Boot */
 	lmb_init(&lmb);
-	lmb_add(&lmb, gd->ram_base, get_effective_memsize());
+	lmb_add(&lmb, gd->ram_base, gd->ram_top - gd->ram_base);
 	boot_fdt_add_mem_rsv_regions(&lmb, (void *)gd->fdt_blob);
 	/* add 8M for reserved memory for display, fdt, gd,... */
 	size = ALIGN(SZ_8M + CONFIG_SYS_MALLOC_LEN + total_size, MMU_SECTION_SIZE),
@@ -65,4 +80,15 @@ phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
 		mmu_set_region_dcache_behaviour(reg, size, DCACHE_DEFAULT_OPTION);
 
 	return reg + size;
+}
+
+void efi_add_known_memory(void)
+{
+	if (IS_ENABLED(CONFIG_EFI_LOADER))
+		/*
+		 * Memory over ram_top is reserved to OPTEE.
+		 * Declare to EFI only memory area below ram_top
+		 */
+		efi_add_memory_map(gd->ram_base, gd->ram_top - gd->ram_base,
+				   EFI_CONVENTIONAL_MEMORY);
 }

@@ -25,6 +25,12 @@
 		multiple-images;
 	};
 
+	firmware {
+		optee {
+			bootph-all;
+		};
+	};
+
 	soc {
 		bootph-all;
 
@@ -135,7 +141,7 @@
 };
 
 &usart1 {
-	resets = <&rcc USART1_R>;
+	resets = <&scmi_reset RST_SCMI_USART1>;
 };
 
 &usart2 {

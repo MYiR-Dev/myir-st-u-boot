@@ -168,6 +168,7 @@ struct sfdp_header {
 #define BFPT_DWORD18_CMD_EXT_INV		(0x1UL << 29) /* Invert */
 #define BFPT_DWORD18_CMD_EXT_RES		(0x2UL << 29) /* Reserved */
 #define BFPT_DWORD18_CMD_EXT_16B		(0x3UL << 29) /* 16-bit opcode */
+#define BFPT_DWORD18_BYTE_ORDER_SWAPPED		BIT(31) /* Byte order of 16-bit words */
 
 /* xSPI Profile 1.0 table (from JESD216D.01). */
 #define PROFILE1_DWORD1_RD_FAST_CMD		GENMASK(15, 8)
@@ -273,6 +274,8 @@ void spi_nor_setup_op(const struct spi_nor *nor,
 		 */
 		op->cmd.dtr = op->addr.dtr = op->dummy.dtr =
 			op->data.dtr = true;
+		op->data.dtr_swab16 = (proto == SNOR_PROTO_8_8_8_DTR) &&
+				      (nor->flags & SNOR_F_DTR_SWAB16);
 
 		/* 2 bytes per clock cycle in DTR mode. */
 		op->dummy.nbytes *= 2;
@@ -2409,6 +2412,10 @@ static int spi_nor_parse_bfpt(struct spi_nor *nor,
 		return -ENOTSUPP;
 	}
 
+	/* Byte order in 8D-8D-8D mode */
+	if (bfpt.dwords[BFPT_DWORD(18)] & BFPT_DWORD18_BYTE_ORDER_SWAPPED)
+		nor->flags |= SNOR_F_DTR_SWAB16;
+
 	return spi_nor_post_bfpt_fixups(nor, bfpt_header, &bfpt, params);
 }
 
@@ -4160,6 +4167,8 @@ int spi_nor_scan(struct spi_nor *nor)
 	if (spi_nor_protocol_is_dtr(nor->read_proto)) {
 		 /* Always use 4-byte addresses in DTR mode. */
 		nor->addr_width = 4;
+		if (info->flags & SPI_NOR_4B_OPCODES)
+			spi_nor_set_4byte_opcodes(nor, info);
 	} else if (nor->addr_width) {
 		/* already configured from SFDP */
 	} else if (info->addr_width) {

@@ -12,6 +12,7 @@
 #include <malloc.h>
 #include <asm/gpio.h>
 #include <asm/io.h>
+#include <dm/device-internal.h>
 #include <dm/device_compat.h>
 #include <dm/lists.h>
 #include <dm/pinctrl.h>
@@ -27,6 +28,13 @@
 #define PUPD_MASK			3
 #define OTYPE_MSK			1
 #define AFR_MASK			0xF
+#define SECCFG_MSK			1
+#define ADVCFGR_MASK			0xF
+#define DELAYR_MASK			0xF
+#define ADVCFGR_DLYPATH_POS		0
+#define ADVCFGR_DE_POS			1
+#define ADVCFGR_INVCLK_POS		2
+#define ADVCFGR_RET_POS			3
 
 struct stm32_pinctrl_priv {
 	struct hwspinlock hws;
@@ -38,6 +46,14 @@ struct stm32_gpio_bank {
 	struct udevice *gpio_dev;
 	struct list_head list;
 };
+
+struct stm32_pinctrl_data {
+	bool secure_control;
+	bool io_sync_control;
+	bool rif_control;
+};
+
+static int stm32_pinctrl_get_access(struct udevice *gpio_dev, unsigned int gpio_idx);
 
 #ifndef CONFIG_SPL_BUILD
 
@@ -216,6 +232,12 @@ static int stm32_pinctrl_get_pin_muxing(struct udevice *dev,
 	if (!gpio_dev)
 		return -ENODEV;
 
+	/* Check access protection */
+	if (stm32_pinctrl_get_access(gpio_dev, gpio_idx)) {
+		snprintf(buf, size, "NO ACCESS");
+		return 0;
+	}
+
 	mode = gpio_get_raw_function(gpio_dev, gpio_idx, &label);
 	dev_dbg(dev, "selector = %d gpio_idx = %d mode = %d\n",
 		selector, gpio_idx, mode);
@@ -252,6 +274,25 @@ static int stm32_pinctrl_get_pin_muxing(struct udevice *dev,
 
 #endif
 
+static int stm32_pinctrl_get_access(struct udevice *gpio_dev, unsigned int gpio_idx)
+{
+	struct stm32_gpio_priv *priv = dev_get_priv(gpio_dev);
+	struct stm32_gpio_regs *regs = priv->regs;
+	ulong drv_data = dev_get_driver_data(gpio_dev);
+
+	/* Deny request access if IO is secured */
+	if ((drv_data & STM32_GPIO_FLAG_SEC_CTRL) &&
+	    ((readl(&regs->seccfgr) >> gpio_idx) & SECCFG_MSK))
+		return -EACCES;
+
+	/* Deny request access if IO RIF semaphore is not available */
+	if ((drv_data & STM32_GPIO_FLAG_RIF_CTRL) &&
+	    !stm32_gpio_rif_valid(regs, gpio_idx))
+		return -EACCES;
+
+	return 0;
+}
+
 static int stm32_pinctrl_probe(struct udevice *dev)
 {
 	struct stm32_pinctrl_priv *priv = dev_get_priv(dev);
@@ -277,10 +318,26 @@ static int stm32_gpio_config(ofnode node,
 	struct stm32_gpio_regs *regs = priv->regs;
 	struct stm32_pinctrl_priv *ctrl_priv;
 	int ret;
-	u32 index;
+	u32 index, io_sync, advcfg;
+
+	/* Check access protection */
+	ret = stm32_pinctrl_get_access(desc->dev, desc->offset);
+	if (ret) {
+		dev_err(desc->dev, "Failed to get secure IO %s %d @ %p\n",
+			uc_priv->bank_name, desc->offset, regs);
+		return ret;
+	}
 
 	if (!ctl || ctl->af > 15 || ctl->mode > 3 || ctl->otype > 1 ||
 	    ctl->pupd > 2 || ctl->speed > 3)
+		return -EINVAL;
+
+	io_sync = dev_get_driver_data(desc->dev) & STM32_GPIO_FLAG_IO_SYNC_CTRL;
+	if (io_sync && (ctl->delay_path > STM32_GPIO_DELAY_PATH_IN ||
+			ctl->clk_edge > STM32_GPIO_CLK_EDGE_DOUBLE ||
+			ctl->clk_type > STM32_GPIO_CLK_TYPE_INVERT ||
+			ctl->retime > STM32_GPIO_RETIME_ENABLED ||
+			ctl->delay > STM32_GPIO_DELAY_3_25))
 		return -EINVAL;
 
 	ctrl_priv = dev_get_priv(dev_get_parent(desc->dev));
@@ -303,6 +360,20 @@ static int stm32_gpio_config(ofnode node,
 
 	index = desc->offset;
 	clrsetbits_le32(&regs->otyper, OTYPE_MSK << index, ctl->otype << index);
+
+	if (io_sync) {
+		index = (desc->offset & 0x07) * 4;
+		advcfg = (ctl->delay_path << ADVCFGR_DLYPATH_POS) |
+			 (ctl->clk_edge << ADVCFGR_DE_POS) |
+			 (ctl->clk_type << ADVCFGR_INVCLK_POS) |
+			 (ctl->retime << ADVCFGR_RET_POS);
+
+		clrsetbits_le32(&regs->advcfgr[desc->offset >> 3],
+				ADVCFGR_MASK << index, advcfg << index);
+
+		clrsetbits_le32(&regs->delayr[desc->offset >> 3],
+				DELAYR_MASK << index, ctl->delay << index);
+	}
 
 	uc_priv->name[desc->offset] = strdup(ofnode_get_name(node));
 
@@ -356,9 +427,23 @@ static int prep_gpio_ctl(struct stm32_gpio_ctl *gpio_ctl, u32 gpio_fn,
 	else
 		gpio_ctl->pupd = STM32_GPIO_PUPD_NO;
 
+	gpio_ctl->delay_path = ofnode_read_u32_default(node, "st,io-delay-path", 0);
+	gpio_ctl->clk_edge = ofnode_read_u32_default(node, "st,io-clk-edge", 0);
+	gpio_ctl->clk_type = ofnode_read_u32_default(node, "st,io-clk-type", 0);
+	gpio_ctl->retime = ofnode_read_u32_default(node, "st,io-retime", 0);
+	gpio_ctl->delay = ofnode_read_u32_default(node, "st,io-delay", 0);
+
 	log_debug("gpio fn= %d, slew-rate= %x, op type= %x, pull-upd is = %x\n",
 		  gpio_fn, gpio_ctl->speed, gpio_ctl->otype,
 		  gpio_ctl->pupd);
+
+	if (gpio_ctl->retime || gpio_ctl->clk_type || gpio_ctl->clk_edge || gpio_ctl->delay_path ||
+	    gpio_ctl->delay)
+		log_debug("	Retime:%d InvClk:%d DblEdge:%d DelayIn:%d\n",
+			  gpio_ctl->retime, gpio_ctl->clk_type, gpio_ctl->clk_edge,
+			  gpio_ctl->delay_path);
+	if (gpio_ctl->delay)
+		log_debug("	Delay: %d (%d ps)\n", gpio_ctl->delay, gpio_ctl->delay * 250);
 
 	return 0;
 }
@@ -414,7 +499,28 @@ static int stm32_pinctrl_bind(struct udevice *dev)
 {
 	ofnode node;
 	const char *name;
+	struct driver *drv;
+	const struct stm32_pinctrl_data *drv_data;
+	ulong gpio_data = 0;
 	int ret;
+
+	drv = lists_driver_lookup_name("gpio_stm32");
+	if (!drv) {
+		debug("Cannot find driver 'gpio_stm32'\n");
+		return -ENOENT;
+	}
+
+	drv_data = (const struct stm32_pinctrl_data *)dev_get_driver_data(dev);
+	if (!drv_data) {
+		debug("Cannot find driver data\n");
+		return -EINVAL;
+	}
+	if (drv_data->secure_control)
+		gpio_data |= STM32_GPIO_FLAG_SEC_CTRL;
+	if (drv_data->io_sync_control)
+		gpio_data |= STM32_GPIO_FLAG_IO_SYNC_CTRL;
+	if (drv_data->rif_control)
+		gpio_data |= STM32_GPIO_FLAG_RIF_CTRL;
 
 	dev_for_each_subnode(node, dev) {
 		dev_dbg(dev, "bind %s\n", ofnode_get_name(node));
@@ -431,8 +537,7 @@ static int stm32_pinctrl_bind(struct udevice *dev)
 			return -EINVAL;
 
 		/* Bind each gpio node */
-		ret = device_bind_driver_to_node(dev, "gpio_stm32",
-						 name, node, NULL);
+		ret = device_bind_with_driver_data(dev, drv, name, gpio_data, node, NULL);
 		if (ret)
 			return ret;
 
@@ -495,15 +600,37 @@ static struct pinctrl_ops stm32_pinctrl_ops = {
 #endif
 };
 
+static const struct stm32_pinctrl_data stm32_pinctrl_base = {
+	.secure_control = false,
+	.io_sync_control = false,
+	.rif_control = false,
+};
+
+static const struct stm32_pinctrl_data stm32_pinctrl_sec = {
+	.secure_control = true,
+	.io_sync_control = false,
+	.rif_control = false,
+};
+
+static const struct stm32_pinctrl_data stm32_pinctrl_sec_iosync = {
+	.secure_control = true,
+	.io_sync_control = true,
+	.rif_control = true,
+};
+
 static const struct udevice_id stm32_pinctrl_ids[] = {
-	{ .compatible = "st,stm32f429-pinctrl" },
-	{ .compatible = "st,stm32f469-pinctrl" },
-	{ .compatible = "st,stm32f746-pinctrl" },
-	{ .compatible = "st,stm32f769-pinctrl" },
-	{ .compatible = "st,stm32h743-pinctrl" },
-	{ .compatible = "st,stm32mp157-pinctrl" },
-	{ .compatible = "st,stm32mp157-z-pinctrl" },
-	{ .compatible = "st,stm32mp135-pinctrl" },
+	{ .compatible = "st,stm32f429-pinctrl",    .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32f469-pinctrl",    .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32f746-pinctrl",    .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32f769-pinctrl",    .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32h743-pinctrl",    .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32mp157-pinctrl",   .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32mp157-z-pinctrl", .data = (ulong)&stm32_pinctrl_base },
+	{ .compatible = "st,stm32mp135-pinctrl",   .data = (ulong)&stm32_pinctrl_sec },
+	{ .compatible = "st,stm32mp215-pinctrl",   .data = (ulong)&stm32_pinctrl_sec_iosync },
+	{ .compatible = "st,stm32mp215-z-pinctrl", .data = (ulong)&stm32_pinctrl_sec_iosync },
+	{ .compatible = "st,stm32mp257-pinctrl",   .data = (ulong)&stm32_pinctrl_sec_iosync },
+	{ .compatible = "st,stm32mp257-z-pinctrl", .data = (ulong)&stm32_pinctrl_sec_iosync },
 	{ }
 };
 

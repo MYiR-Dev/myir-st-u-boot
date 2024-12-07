@@ -1,6 +1,6 @@
-if STM32MP15x
+if STM32MP15X
 
-config STM32MP15x_STM32IMAGE
+config STM32MP15X_STM32IMAGE
 	bool "Support STM32 image for generated U-Boot image"
 	depends on TFABOOT
 	help
@@ -11,14 +11,12 @@ choice
 	prompt "STM32MP15x board select"
 	optional
 
-config TARGET_ST_STM32MP15x
+config TARGET_ST_STM32MP15X
 	bool "STMicroelectronics STM32MP15x boards"
 	imply BOOTSTAGE
 	imply CMD_BOOTSTAGE
 	imply CMD_CLS if CMD_BMP
-	imply DISABLE_CONSOLE
 	imply PRE_CONSOLE_BUFFER
-	imply SILENT_CONSOLE
 	help
 		target the STMicroelectronics board with SOC STM32MP15x
 		managed by board/st/stm32mp1:
@@ -35,9 +33,7 @@ config TARGET_MICROGEA_STM32MP1
 	imply BOOTSTAGE
 	imply CMD_BOOTSTAGE
 	imply CMD_CLS if CMD_BMP
-	imply DISABLE_CONSOLE
 	imply PRE_CONSOLE_BUFFER
-	imply SILENT_CONSOLE
 	help
 	  MicroGEA STM32MP1 is a STM32MP157A based Micro SOM.
 
@@ -59,9 +55,7 @@ config TARGET_ICORE_STM32MP1
 	imply BOOTSTAGE
 	imply CMD_BOOTSTAGE
 	imply CMD_CLS if CMD_BMP
-	imply DISABLE_CONSOLE
 	imply PRE_CONSOLE_BUFFER
-	imply SILENT_CONSOLE
 	help
 	  i.Core STM32MP1 is an EDIMM SOM based on STM32MP157A.
 

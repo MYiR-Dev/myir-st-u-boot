@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 or BSD-3-Clause */
+/* SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause */
 /*
  * Copyright (C) STMicroelectronics 2018 - All Rights Reserved
  * Author: Gabriel Fernandez <gabriel.fernandez@st.com> for STMicroelectronics.
@@ -178,6 +178,12 @@
 #define LTDC_PX		167
 #define DAC12_K		168
 #define ETHPTP_K	169
+
+#define PCLK1		170
+#define PCLK2		171
+#define PCLK3		172
+#define PCLK4		173
+#define PCLK5		174
 
 /* PLL */
 #define PLL1		176

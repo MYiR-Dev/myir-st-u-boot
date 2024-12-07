@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0+
 
+DEVICE_TREE_EXT ?=
+
+ifneq ($(DEVICE_TREE_EXT),)
+dtb-y += $(DEVICE_TREE_EXT)
+endif
+
 dtb-$(CONFIG_TARGET_SMARTWEB) += at91sam9260-smartweb.dtb
 dtb-$(CONFIG_TARGET_TAURUS) += at91sam9g20-taurus.dtb
 dtb-$(CONFIG_TARGET_CORVUS) += at91sam9g45-corvus.dtb
@@ -1282,29 +1288,43 @@ dtb-$(CONFIG_ASPEED_AST2600) += ast2600-evb.dtb
 
 dtb-$(CONFIG_ARCH_STI) += stih410-b2260.dtb
 
-dtb-$(CONFIG_STM32MP13x) += \
+dtb-$(CONFIG_STM32MP13X) += \
 	stm32mp135f-dk.dtb
 
-dtb-$(CONFIG_STM32MP15x) += \
+dtb-$(CONFIG_STM32MP15X) += \
 	stm32mp157a-dk1.dtb \
-	stm32mp157a-dk1-scmi.dtb \
+	stm32mp157a-ed1.dtb \
+	stm32mp157a-ev1.dtb \
 	stm32mp157a-icore-stm32mp1-ctouch2.dtb \
 	stm32mp157a-icore-stm32mp1-edimm2.2.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0-of7.dtb \
 	stm32mp157c-dk2.dtb \
-	stm32mp157c-dk2-scmi.dtb \
 	stm32mp157c-ed1.dtb \
-	stm32mp157c-ed1-scmi.dtb \
 	stm32mp157c-ev1.dtb \
-	stm32mp157c-ev1-scmi.dtb \
 	stm32mp157c-odyssey.dtb \
+	stm32mp157d-dk1.dtb \
+	stm32mp157d-ed1.dtb \
+	stm32mp157d-ev1.dtb \
+	stm32mp157f-dk2.dtb \
+	stm32mp157f-ed1.dtb \
+	stm32mp157f-ev1.dtb \
 	stm32mp15xx-dhcom-drc02.dtb \
 	stm32mp15xx-dhcom-pdk2.dtb \
 	stm32mp15xx-dhcom-picoitx.dtb \
 	stm32mp15xx-dhcor-avenger96.dtb \
 	stm32mp15xx-dhcor-drc-compact.dtb \
 	stm32mp15xx-dhcor-testbench.dtb
+
+dtb-$(CONFIG_STM32MP21X) += \
+	stm32mp215f-dk.dtb
+
+dtb-$(CONFIG_STM32MP23X) += \
+	stm32mp235f-dk.dtb
+
+dtb-$(CONFIG_STM32MP25X) += \
+	stm32mp257f-dk.dtb \
+	stm32mp257f-ev1.dtb
 
 dtb-$(CONFIG_SOC_K3_AM654) += \
 	k3-am654-base-board.dtb \
