@@ -730,10 +730,10 @@ int board_late_init(void)
 		fdt_compat = fdt_getprop(gd->fdt_blob, 0, "compatible",
 					 &fdt_compat_len);
 		if (fdt_compat && fdt_compat_len) {
-			if (strncmp(fdt_compat, "st,", 3) != 0) {
+			if (strncmp(fdt_compat, "myir,", 5) != 0) {
 				env_set("board_name", fdt_compat);
 			} else {
-				env_set("board_name", fdt_compat + 3);
+				env_set("board_name", fdt_compat + 5);
 
 				buf_len = sizeof(dtb_name);
 				strlcpy(dtb_name, fdt_compat + 3, buf_len);
