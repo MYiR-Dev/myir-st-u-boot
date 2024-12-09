@@ -333,6 +333,7 @@ int gen10g_config(struct phy_device *phydev);
 int gen10g_startup(struct phy_device *phydev);
 int gen10g_shutdown(struct phy_device *phydev);
 int gen10g_discover_mmds(struct phy_device *phydev);
+int phy_motorcomm_init(void);
 
 /**
  * U_BOOT_PHY_DRIVER() - Declare a new U-Boot driver
