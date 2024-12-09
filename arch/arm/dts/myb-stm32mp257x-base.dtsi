@@ -159,13 +159,6 @@
 		status = "okay";
 	};
 
-	sound: sound {
-		compatible = "audio-graph-card";
-		label = "STM32MP25-EV1";
-		dais = <&i2s2_port>;
-		status = "disabled";
-	};
-
 	vdiv_ana0: voltage-divider-ana0 {
 		compatible = "voltage-divider";
 		io-channels = <&adc1 0>;

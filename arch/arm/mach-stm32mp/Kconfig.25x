@@ -19,7 +19,7 @@ config TARGET_MYIR_MYD_LD25X
         imply CMD_BOOTSTAGE
         help
                 target the STMicroelectronics board with SOC STM32MP25x
-                managed by board/myir/myd-ld25x
+                managed by board/myir/myd_ld25x
                 The difference between board are managed with devicetree
 
 endchoice
