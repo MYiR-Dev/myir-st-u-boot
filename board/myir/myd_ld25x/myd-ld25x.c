@@ -365,11 +365,15 @@ static void board_myd_ld25x_init(void)
 	compatible = detect_device(stm32mp25x_bridges, ARRAY_SIZE(stm32mp25x_bridges));
 
 	if (!compatible)
+	{
 		/* remove the hdmi bridge in environment */
 		env_set("hdmi", "");
+	}
 	else
+	{
 		/* save the detected compatible in environment */
 		env_set("hdmi", compatible);
+	}
 
 }
 
@@ -520,11 +524,13 @@ static bool board_is_stm32mp257_eval(void)
 
 static bool board_is_myd_ld25x(void)
 {
-	if (CONFIG_IS_ENABLED(TARGET_MYIR_MYD_LD25X) &&
-	    (of_machine_is_compatible("st,myb-stm32mp257x-2GB")) &&
-	    (of_machine_is_compatible("st,myb-stm32mp257x-1GB")))
-	 	return true;
-
+	if (CONFIG_IS_ENABLED(TARGET_MYIR_MYD_LD25X) && 
+			(of_machine_is_compatible("myir,myb-stm32mp257x-2GB") || of_machine_is_compatible("myir,myb-stm32mp257x-1GB")))
+	{
+		return true;
+		printf("Confirmation Completed");	
+	}
+	printf("Confirmation Error");
 	return false;
 }
 
