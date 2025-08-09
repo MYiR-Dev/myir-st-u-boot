@@ -4,6 +4,17 @@ choice
 	prompt "STM32MP13x board select"
 	optional
 
+config TARGET_MYIR_MYD_YF13X
+        bool "MYIR MYD-YF13X boards"
+        imply BOOTSTAGE
+        imply CMD_BOOTSTAGE
+        imply CMD_CLS if CMD_BMP
+        imply PRE_CONSOLE_BUFFER
+        help
+                target the MYIR board with SOC STM32MP13x
+                managed by board/myir/myd_yf13x.
+                The difference between board are managed with devicetree
+
 config TARGET_ST_STM32MP13X
 	bool "STMicroelectronics STM32MP13x boards"
 	imply BOOTSTAGE
@@ -51,5 +62,6 @@ config DEBUG_UART_CLOCK
 endif
 
 source "board/st/stm32mp1/Kconfig"
+source "board/myir/myd_yf13x/Kconfig"
 
 endif

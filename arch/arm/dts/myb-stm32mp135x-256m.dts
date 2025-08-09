@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2021 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+
+
+#include "myb-stm32mp135x-base.dts"
+
+/ {
+	model = "STMicroelectronics MYIR NAND  Board";
+	compatible = "myb-stm32mp135x-256m", "st,stm32mp135";
+
+	aliases {
+		ethernet0 = &ethernet1;
+		ethernet1 = &ethernet2;
+		serial0 = &uart4;
+		serial1 = &usart1;
+		serial2 = &uart8;
+		serial3 = &usart2;
+	};
+
+	chosen {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		stdout-path = "serial0:115200n8";
+
+		framebuffer {
+			compatible = "simple-framebuffer";
+			clocks = <&rcc LTDC_PX>;
+			status = "disabled";
+		};
+	};
+
+	memory@c0000000 {
+		device_type = "memory";
+		reg = <0xc0000000 0x10000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		optee_framebuffer@cd000000 {
+			reg = <0xcd000000 0x1000000>;
+			no-map;
+		};
+
+		optee@ce000000 {
+			reg = <0xce000000 0x2000000>;
+			no-map;
+		};
+	};
+};
