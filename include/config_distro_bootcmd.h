@@ -496,7 +496,7 @@
 	"boot_script_dhcp=boot.scr.uimg\0" \
 	BOOTENV_BOOT_TARGETS \
 	\
-	"boot_syslinux_conf=extlinux/extlinux.conf\0" \
+	"boot_syslinux_conf=extlinux/${board_name}_extlinux.conf\0" \
 	"boot_extlinux="                                                  \
 		"sysboot ${devtype} ${devnum}:${distro_bootpart} any "    \
 			"${scriptaddr} ${prefix}${boot_syslinux_conf}\0"  \
