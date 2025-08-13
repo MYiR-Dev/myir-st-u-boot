@@ -46,3 +46,9 @@ config STM32MP1_DDR_TUNING
 		used for DDR tuning tools
 		- DQ Deskew algorithm
 		- DQS Trimming
+
+config STM32_DDR_SIZE
+        hex "Size of the DDR"
+        default 0x20000000
+        help
+                the ddr size is selected

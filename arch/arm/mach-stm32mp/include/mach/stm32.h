@@ -112,7 +112,8 @@ enum forced_boot_mode {
 #endif
 
 #define STM32_DDR_BASE			0xC0000000
-#define STM32_DDR_SIZE			SZ_1G
+//#define STM32_DDR_SIZE			SZ_1G
+#define STM32_DDR_SIZE			CONFIG_STM32_DDR_SIZE
 
 #ifndef __ASSEMBLY__
 /*
