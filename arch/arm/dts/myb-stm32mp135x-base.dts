@@ -130,15 +130,21 @@
         phy-handle = <&phy0_eth1>;
         // st,ext-phyclk;
         // st,eth-clk-sel;
-        st,phy-reset-gpios = <&gpiob 10 GPIO_ACTIVE_HIGH>;
+	nvmem-cells = <&ethernet_mac1_address>;
+        nvmem-cell-names = "mac-address";
 
         mdio1 {
                 #address-cells = <1>;
                 #size-cells = <0>;
                 compatible = "snps,dwmac-mdio";
+
                 phy0_eth1: ethernet-phy@0 {
                                 compatible = "ethernet-phy-ieee802.3-c22";
+          			reset-gpios =  <&gpiob 10 GPIO_ACTIVE_LOW>;
+                        	reset-assert-us = <1000>;
+                        	reset-deassert-us = <30000>;
                                 reg = <0>;
+				wakeup-source;
                 };
         };
 };
@@ -155,15 +161,18 @@
         // st,ext-phyclk;
         // st,eth-clk-sel;
         phy-supply = <&v3v3_ao>;
-        st,phy-reset-gpios =  <&gpioh 5 GPIO_ACTIVE_HIGH>;
-        // reset-deassert-us = <1000>;
-        // reset-assert-us = <1000>;
+  	nvmem-cells = <&ethernet_mac2_address>;
+        nvmem-cell-names = "mac-address";
+
         mdio1 {
                 #address-cells = <1>;
                 #size-cells = <0>;
                 compatible = "snps,dwmac-mdio";
                 phy0_eth2: ethernet-phy@2 {
                                 compatible = "ethernet-phy-ieee802.3-c22";
+           			reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
+                        	reset-assert-us = <1000>;
+                        	reset-deassert-us = <30000>;
                                 reg = <2>;
                 };
         };
