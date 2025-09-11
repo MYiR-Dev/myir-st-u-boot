@@ -12,7 +12,8 @@
 	"usb_pgood_delay=2000\0" \
 	"mtdids=spi-nand0=spi-nand0\0" \
 	"mtdparts=mtdparts=spi-nand0:512k(fsbl1),512k(fsbl2),512k(metadata1),512k(metadata2),4m(fip-a1),4m(fip-a2),4m(fip-b1),4m(fip-b2),-(UBI);\0" \
-	"console=ttySTM0\0"
+	"console=ttySTM0\0" \
+	"loglevel=3\0"
 
 #include <configs/stm32mp13_common.h>
 
