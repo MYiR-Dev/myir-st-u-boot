@@ -100,7 +100,7 @@
  */
 #define __KERNEL_COMP_ADDR_R	__stringify(0x84000000)
 #define __KERNEL_COMP_SIZE_R	__stringify(0x04000000)
-#define __KERNEL_ADDR_R		__stringify(0x8a000000)
+#define __KERNEL_ADDR_R		__stringify(0x88000000)
 #define __FDT_ADDR_R		__stringify(0x90000000)
 #define __SCRIPT_ADDR_R		__stringify(0x90100000)
 #define __PXEFILE_ADDR_R	__stringify(0x90200000)
