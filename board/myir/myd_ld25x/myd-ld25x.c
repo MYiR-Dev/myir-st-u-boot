@@ -206,21 +206,28 @@ static bool phy_reset_gpio(ofnode node)
 	struct gpio_desc reset_gpio;
 
 	gpio_request_by_name_nodev(node, "reset-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
-
-	if (!dm_gpio_is_valid(&reset_gpio))
+	if (dm_gpio_is_valid(&reset_gpio))
 	{
-		printf("reset gpio not valid\n");
-		return false;
+		mdelay(12);
+		dm_gpio_set_value(&reset_gpio, true);  // low level
+		mdelay(12);
+		dm_gpio_set_value(&reset_gpio, false); // high level
+		// dm_gpio_free(NULL, &reset_gpio);
 	}
 
-	dm_gpio_set_value(&reset_gpio, false);
-	mdelay(10);
-	dm_gpio_set_value(&reset_gpio, true);
-	mdelay(10);
+	// other
+	gpio_request_by_name_nodev(node, "reset2-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
+	if (dm_gpio_is_valid(&reset_gpio))
+	{
+		mdelay(12);
+		dm_gpio_set_value(&reset_gpio, true);  // low level
+		mdelay(12);
+		dm_gpio_set_value(&reset_gpio, false); // high level
+	}
 
-	dm_gpio_free(NULL, &reset_gpio);
 	return true;
 }
+
 
 /* HELPER: search detected driver */
 struct detect_info_t {
@@ -240,23 +247,28 @@ static const char *detect_device(const struct detect_info_t *info, u8 size)
 	return NULL;
 }
 
-bool myir_reset_phy(void)
+static bool eth_phy_reset(void)
 {
 	ofnode node;
 	int ret;
-	node = ofnode_by_compatible(ofnode_null(), "ethernet-phy-id001c.c916");
+	node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
 	if (!ofnode_valid(node))
 	{
-		printf("node not exist\n");
-		return false;
+		printf("phy node not exist\n");
+	}else{
+		phy_reset_gpio(node);
 	}
 
-	if (!phy_reset_gpio(node))
-	       return false;
-
+	node = ofnode_by_compatible(ofnode_null(), "ethernet-phy2");
+	if (!ofnode_valid(node))
+	{
+		printf("phy node not exist\n");
+	}else{
+		phy_reset_gpio(node);
+	}
 	return true;
-
 }
+
 
 bool detect_stm32mp25x_etml0700zxxdha(void)
 {
@@ -267,10 +279,10 @@ bool detect_stm32mp25x_etml0700zxxdha(void)
 	node = ofnode_by_compatible(ofnode_null(), "ilitek,ili251x");
 	if (!ofnode_valid(node))
 		return false;
-
+printf("reset phy start\n");
 	if (!reset_gpio(node))
 		return false;
-
+printf("reset phy end\n");
 	mdelay(200);
 
 	ret = i2c_read(node, ILITEK_REG_ID, id, sizeof(id), 1);
@@ -721,7 +733,7 @@ int board_late_init(void)
 	if (board_is_myd_ld25x())
 		board_myd_ld25x_init();
 		
-	if (!(myir_reset_phy()))
+	if (!(eth_phy_reset()))
 	{
 		printf("reset failed\n");
 	}
