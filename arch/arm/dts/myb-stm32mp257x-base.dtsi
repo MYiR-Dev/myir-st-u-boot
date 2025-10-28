@@ -344,7 +344,7 @@
 		compatible = "snps,dwmac-mdio";
 		phy1_eth1: ethernet-phy@4 {
 			compatible = "ethernet-phy-id001c.c916","ethernet-phy1";
-			reset-gpios =  <&gpioi 4 GPIO_ACTIVE_LOW>;
+			phy-gpios =  <&gpioi 4 GPIO_ACTIVE_LOW>;
 			reset2-gpios =  <&gpiod 10 GPIO_ACTIVE_LOW>;
 			reset-assert-us = <10000>;
 			reset-deassert-us = <80000>;

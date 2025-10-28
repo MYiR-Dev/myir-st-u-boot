@@ -215,6 +215,7 @@ static bool phy_reset_gpio(ofnode node)
 		// dm_gpio_free(NULL, &reset_gpio);
 	}
 
+
 	// other
 	gpio_request_by_name_nodev(node, "reset2-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
 	if (dm_gpio_is_valid(&reset_gpio))
@@ -224,7 +225,6 @@ static bool phy_reset_gpio(ofnode node)
 		mdelay(12);
 		dm_gpio_set_value(&reset_gpio, false); // high level
 	}
-
 	return true;
 }
 
@@ -269,6 +269,80 @@ static bool eth_phy_reset(void)
 	return true;
 }
 
+static bool eth3_phy_reset(void)
+{
+        ofnode node;
+        int ret;
+        struct gpio_desc reset_gpio;
+        node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
+        if (!ofnode_valid(node))
+        {
+                printf("phy node not exist\n");
+        }else{
+
+       		 gpio_request_by_name_nodev(node, "phy-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
+        	if (dm_gpio_is_valid(&reset_gpio))
+        	{
+                	mdelay(12);
+                	dm_gpio_set_value(&reset_gpio, true);  // low level
+                	mdelay(12);
+                	dm_gpio_set_value(&reset_gpio, false); // high level
+			mdelay(10);
+                	dm_gpio_free(NULL, &reset_gpio);
+        	}
+        }
+	return true;
+}
+
+static bool eth1_phy_reset(void)
+{
+        ofnode node;
+        int ret;
+        struct gpio_desc reset_gpio;
+        node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
+        if (!ofnode_valid(node))
+        {
+                printf("phy node not exist\n");
+        }else{
+
+                 gpio_request_by_name_nodev(node, "reset2-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
+                if (dm_gpio_is_valid(&reset_gpio))
+                {
+                        mdelay(12);
+                        dm_gpio_set_value(&reset_gpio, true);  // low level
+                        mdelay(12);
+                        dm_gpio_set_value(&reset_gpio, false); // high level
+                        mdelay(10);
+                        dm_gpio_free(NULL, &reset_gpio);
+                }
+        }
+        return true;
+}
+
+static bool eth2_phy_reset(void)
+{
+        ofnode node;
+        int ret;
+        struct gpio_desc reset_gpio;
+        node = ofnode_by_compatible(ofnode_null(), "ethernet-phy2");
+        if (!ofnode_valid(node))
+        {
+                printf("phy node not exist\n");
+        }else{
+
+                 gpio_request_by_name_nodev(node, "reset-gpios", 0, &reset_gpio, GPIOD_IS_OUT);
+                if (dm_gpio_is_valid(&reset_gpio))
+                {
+                        mdelay(12);
+                        dm_gpio_set_value(&reset_gpio, true);  // low level
+                        mdelay(12);
+                        dm_gpio_set_value(&reset_gpio, false); // high level
+                        mdelay(10);
+                        dm_gpio_free(NULL, &reset_gpio);
+                }
+        }
+        return true;
+}
 
 bool detect_stm32mp25x_etml0700zxxdha(void)
 {
@@ -279,10 +353,8 @@ bool detect_stm32mp25x_etml0700zxxdha(void)
 	node = ofnode_by_compatible(ofnode_null(), "ilitek,ili251x");
 	if (!ofnode_valid(node))
 		return false;
-printf("reset phy start\n");
 	if (!reset_gpio(node))
 		return false;
-printf("reset phy end\n");
 	mdelay(200);
 
 	ret = i2c_read(node, ILITEK_REG_ID, id, sizeof(id), 1);
@@ -733,10 +805,24 @@ int board_late_init(void)
 	if (board_is_myd_ld25x())
 		board_myd_ld25x_init();
 		
-	if (!(eth_phy_reset()))
+	//if (!(eth_phy_reset()))
+	//{
+	//	printf("reset failed\n");
+	//}
+	if (!(eth1_phy_reset()))
 	{
-		printf("reset failed\n");
+		printf("reset eth1 failed\n");
 	}
+
+        if (!(eth2_phy_reset()))
+        {
+                printf("reset eth2 failed\n");
+        }
+
+        if (!(eth3_phy_reset()))
+        {
+                printf("reset eth3 failed\n");
+        }
 
 	if (board_is_stm32mp257_eval())
 		board_stm32mp25x_eval_init();
