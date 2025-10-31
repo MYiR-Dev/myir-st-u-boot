@@ -11,8 +11,6 @@
 #define STM32MP_BOARD_EXTRA_ENV \
 	"usb_pgood_delay=2000\0" \
 	"loglevel=3\0" \
-	"ethaddr=38:d5:47:00:29:61\0" \
-	"eth1addr=38:d5:47:00:29:62\0" \
 	"console=ttySTM0\0"
 
 #include <configs/myd_ld25x_common.h>
