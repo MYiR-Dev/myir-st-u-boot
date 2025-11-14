@@ -250,7 +250,6 @@ static const char *detect_device(const struct detect_info_t *info, u8 size)
 static bool eth_phy_reset(void)
 {
 	ofnode node;
-	int ret;
 	node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
 	if (!ofnode_valid(node))
 	{
@@ -272,7 +271,6 @@ static bool eth_phy_reset(void)
 static bool eth3_phy_reset(void)
 {
         ofnode node;
-        int ret;
         struct gpio_desc reset_gpio;
         node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
         if (!ofnode_valid(node))
@@ -297,7 +295,6 @@ static bool eth3_phy_reset(void)
 static bool eth1_phy_reset(void)
 {
         ofnode node;
-        int ret;
         struct gpio_desc reset_gpio;
         node = ofnode_by_compatible(ofnode_null(), "ethernet-phy1");
         if (!ofnode_valid(node))
@@ -322,7 +319,6 @@ static bool eth1_phy_reset(void)
 static bool eth2_phy_reset(void)
 {
         ofnode node;
-        int ret;
         struct gpio_desc reset_gpio;
         node = ofnode_by_compatible(ofnode_null(), "ethernet-phy2");
         if (!ofnode_valid(node))
@@ -1098,3 +1094,23 @@ int board_fix_fdt(void *blob)
 }
 #endif /* CONFIG_OF_BOARD_FIXUP */
 
+#if defined(CONFIG_FWU_MULTI_BANK_UPDATE)
+
+#include <fwu.h>
+
+/**
+ * fwu_plat_get_bootidx() - Get the value of the boot index
+ * @boot_idx: Boot index value
+ *
+ * Get the value of the bank(partition) from which the platform
+ * has booted. This value is passed to U-Boot from the earlier
+ * stage bootloader which loads and boots all the relevant
+ * firmware images
+ *
+ */
+void fwu_plat_get_bootidx(uint *boot_idx)
+{
+       *boot_idx = (readl(TAMP_FWU_BOOT_INFO_REG) >>
+                   TAMP_FWU_BOOT_IDX_OFFSET) & TAMP_FWU_BOOT_IDX_MASK;
+}
+#endif /* CONFIG_FWU_MULTI_BANK_UPDATE */

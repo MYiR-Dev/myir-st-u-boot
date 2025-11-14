@@ -189,6 +189,10 @@ enum forced_boot_mode {
 #define TAMP_BOOT_CONTEXT		TAMP_BACKUP_REGISTER(96)
 #endif /* defined(CONFIG_STM32MP21X) || defined(CONFIG_STM32MP23X) || defined(CONFIG_STM32MP25X) */
 
+#define TAMP_FWU_BOOT_INFO_REG         TAMP_BACKUP_REGISTER(48)
+#define TAMP_FWU_BOOT_IDX_MASK         GENMASK(3, 0)
+#define TAMP_FWU_BOOT_IDX_OFFSET       0
+
 /* offset used for BSEC driver: misc_read and misc_write */
 #define STM32_BSEC_SHADOW_OFFSET	0x0
 #define STM32_BSEC_SHADOW(id)		(STM32_BSEC_SHADOW_OFFSET + (id) * 4)
