@@ -541,6 +541,7 @@
 		"part list ${devtype} ${devnum} -bootable devplist; "     \
 		"env exists devplist || setenv devplist 1; "              \
 		"for distro_bootpart in ${devplist}; do "                 \
+		"if test ${altboot} = 1;then setexpr distro_bootpart ${distro_bootpart} + 1; fi;" \
 			"if fstype ${devtype} "                           \
 					"${devnum}:${distro_bootpart} "   \
 					"bootfstype; then "               \
