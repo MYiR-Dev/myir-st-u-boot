@@ -85,6 +85,7 @@
 
 #define STM32MP_EXTRA \
 	"env_check=if env info -p -d -q; then env save; fi\0" \
+	"altbootcmd=echo 'Boot B';setenv altboot 1;run bootcmd_stm32mp\0" \
 	"boot_net_usb_start=true\0"
 
 #ifndef STM32MP_BOARD_EXTRA_ENV
