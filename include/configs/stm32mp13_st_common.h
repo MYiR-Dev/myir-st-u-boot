@@ -30,6 +30,11 @@
  * sdcard
  * for nor boot, distro boot on SD card = mmc0 ONLY !
  */
+#ifdef CONFIG_MYIR_512N512D
+#define ST_STM32MP13_FUSE_PROG "fuse prog -y 0 9 20400000;"
+#else
+#define ST_STM32MP13_FUSE_PROG 
+#endif
 #define ST_STM32MP13_BOOTCMD "bootcmd_stm32mp=" \
 	"echo \"Boot over ${boot_device}${boot_instance}!\";" \
 	"if test ${boot_device} = serial || test ${boot_device} = usb;" \
@@ -40,7 +45,9 @@
 		"then env set boot_targets \"mmc${boot_instance}\"; fi;" \
 		"if test ${boot_device} = nand ||" \
 		  " test ${boot_device} = spi-nand ;" \
-		"then env set boot_targets ubifs0 mmc0; fi;" \
+		"then env set boot_targets ubifs0 mmc0;" \
+		ST_STM32MP13_FUSE_PROG \
+		"fi;" \
 		"if test ${boot_device} = nor;" \
 		"then env set boot_targets mmc0; fi;" \
 		"run distro_bootcmd;" \

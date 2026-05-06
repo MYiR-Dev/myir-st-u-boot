@@ -9,6 +9,13 @@ config SYS_VENDOR
 config SYS_CONFIG_NAME
 	default "myd_yf13x"
 
+config MYIR_512N512D
+	bool "MYIR 512N512D board variant"
+	depends on MTD_SPI_NAND
+	default n
+	help
+	  Enable board-specific behavior for the MYIR 512N512D NAND variant.
+
 source "board/myir/common/Kconfig"
 endif
 
